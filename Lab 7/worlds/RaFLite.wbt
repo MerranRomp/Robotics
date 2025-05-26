@@ -1,4 +1,4 @@
-#VRML_SIM R2023a utf8
+#VRML_SIM R2025a utf8
 
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023a/projects/robots/gctronic/e-puck/protos/E-puck.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023a/projects/robots/gctronic/e-puck/protos/E-puckGroundSensors.proto"
@@ -9,8 +9,8 @@ EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023a/project
 WorldInfo {
 }
 Viewpoint {
-  orientation 0.3822215937443899 -0.6599487689345311 -0.6468185801732163 4.733720949445207
-  position 0.2675658680725993 -0.4277789375506129 0.860464133582319
+  orientation 0.38626801997946825 -0.6786200954056886 -0.6247173623749507 4.717236330902583
+  position -0.3205245021223154 -0.73964961209269 1.7279169516965376
   follow "e-puck"
 }
 TexturedBackground {
