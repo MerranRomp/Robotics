@@ -121,12 +121,12 @@ while robot.step(timestep) != -1:
         rightSpeed = speed
             
     if current_state == 'turn_right':
-        leftSpeed = 0.5 * speed
-        rightSpeed = 0 * speed
+        leftSpeed = 1 * speed
+        rightSpeed = 0.5 * speed
 
     if current_state == 'turn_left':
-        leftSpeed = 0 * speed
-        rightSpeed = 0.5 * speed
+        leftSpeed = -1 * speed
+        rightSpeed = 1 * speed
         
     if current_state == 'stop':
         leftSpeed = 0.0
