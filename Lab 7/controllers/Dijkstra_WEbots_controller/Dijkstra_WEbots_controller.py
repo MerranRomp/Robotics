@@ -1,6 +1,6 @@
 from controller import Robot
 import numpy as np
-555
+
 #-------------------------------------------------------
 # Open serial port to communicate with the microcontroller
 
