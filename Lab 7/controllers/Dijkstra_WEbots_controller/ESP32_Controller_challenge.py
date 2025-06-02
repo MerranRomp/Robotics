@@ -10,13 +10,18 @@ graph = {
     'A4': [('A3', 1), ('A5', 1)],
     'A5': [('A4', 1), ('B5', 1), ('A9', 1)],
     'A9': [('A5', 1), ('B1', 1)],
+
     'B1': [('A1', 1), ('C1', 1)],
     'B5': [('A5', 1), ('B9', 1), ('C5', 1)],
+    'B9': [('A9', 1), ('B5', 1), ('C9', 1)],
+
     'C1': [('D1', 1), ('C5', 1), ('B1', 1)],
     'C5': [('C1', 1), ('B5', 1), ('C9', 1), ('D5', 1)],
     'C9': [('B9', 1), ('C5', 1), ('E9', 1)],
+
     'D1': [('C1', 1), ('D5', 1), ('E1', 1)],
     'D5': [('D1', 1), ('C5', 1), ('E5', 1)],
+
     'E1': [('D1', 1), ('E5', 1)],
     'E5': [('E1', 1), ('D5', 1), ('E6', 1)],
     'E6': [('E5', 1), ('E7', 1)],
@@ -24,6 +29,7 @@ graph = {
     'E8': [('E7', 1), ('E9', 1)],
     'E9': [('E8', 1), ('C9', 1)],
 }
+
 
 def dijkstra(graph, start):
     unvisited = set(graph.keys())
@@ -52,8 +58,9 @@ def shortest_path(graph, start, end):
         node = previous[node]
     return path
 
-planned_path = shortest_path(graph, 'A1', 'E9')
+planned_path = shortest_path(graph, 'C1', 'D5')
 print('Planned path:', planned_path)
+current_index = 0  # start at first node in path
 
 # ----------------- Hardware Setup -----------------
 
@@ -71,6 +78,7 @@ while button_left() == False:
     led_board.value(not led_board())
 
 uart = UART(1, 115200, tx=1, rx=3)
+
 
 line_left = False
 line_center = False
@@ -174,3 +182,4 @@ while True:
 
     counter += 1
     sleep(0.02)
+
