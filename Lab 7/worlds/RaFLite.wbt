@@ -34,7 +34,7 @@ RectangleArena {
 DEF E_PUCK E-puck {
   translation 0.50002 -0.101763 -6.39438e-05
   rotation 0 0 1 1.5708
-  controller "line_following_with_HIL"
+  controller "Lab_7_Controller_webots"
   window "botstudio"
   camera_width 40
   camera_height 1
