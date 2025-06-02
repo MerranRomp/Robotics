@@ -1,5 +1,8 @@
 R & P DEMONSTRATION REPOSITORY OF MERRAN ROMP & SVEN ZUIDEMA
 
+Dependencies
+Python 3.11.9
+Numpy 2.2.5
 
 
 Improvement tracking
