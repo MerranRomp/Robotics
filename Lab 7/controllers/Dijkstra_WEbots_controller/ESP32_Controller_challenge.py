@@ -58,9 +58,11 @@ def shortest_path(graph, start, end):
         node = previous[node]
     return path
 
-planned_path = shortest_path(graph, 'C1', 'D5')
+planned_path = shortest_path(graph, 'A1', 'D5')
 print('Planned path:', planned_path)
-current_index = 0  # start at first node in path
+current_path_index = 0  # Start at first node in path
+current_target_node = planned_path[current_path_index]
+next_target_node = planned_path[current_path_index + 1] if current_path_index + 1 < len(planned_path) else None
 
 # ----------------- Hardware Setup -----------------
 
@@ -90,7 +92,6 @@ COUNTER_MAX = 5
 COUNTER_STOP = 50
 state_updated = True
 
-# --- NEW ---
 node_detected = False
 node_cooldown = 0
 
@@ -121,12 +122,20 @@ while True:
             line_right = False
             led_red.off()
 
-    # --- NEW --- Node detection logic
+    # --- Enhanced Node Detection ---
     if not node_detected:
         if (line_left and line_center and line_right) or (not line_left and not line_center and not line_right):
             node_detected = True
             node_cooldown = 20  # ~0.4 sec at 20ms step
-            print(">>> Node detected!")
+            
+            # Check if we're at the next expected node in the path
+            if current_path_index + 1 < len(planned_path):
+                print(f">>> Reached {planned_path[current_path_index]}. Next target: {planned_path[current_path_index + 1]}")
+                current_path_index += 1
+                current_target_node = planned_path[current_path_index]
+                next_target_node = planned_path[current_path_index + 1] if current_path_index + 1 < len(planned_path) else None
+            else:
+                print(">>> Reached final destination!")
 
     if node_cooldown > 0:
         node_cooldown -= 1
@@ -182,4 +191,3 @@ while True:
 
     counter += 1
     sleep(0.02)
-
