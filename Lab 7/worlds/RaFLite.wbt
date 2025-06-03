@@ -10,7 +10,7 @@ WorldInfo {
 }
 Viewpoint {
   orientation 0.41623657436613504 -0.41964179413480424 -0.8066274721178713 4.42420448318617
-  position -0.14283519620402707 -1.0492792146421588 1.258165501202229
+  position -0.14283519620402707 -1.0492792146421588 1.2581655040768467
   follow "e-puck"
 }
 TexturedBackground {
@@ -32,16 +32,18 @@ RectangleArena {
   }
 }
 DEF E_PUCK E-puck {
-  hidden position_0_0 3.095548915799833e-08
-  hidden position_0_1 -3.095545386342704e-08
-  hidden rotation_1 0 1 0 2.9802322387695313e-08
-  hidden rotation_2 0 -1 0 2.9802322387695313e-08
-  translation -0.49792999999999976 0.24776299999999926 -6.39619776206593e-05
-  rotation 0.00046020162098943943 7.431506091828373e-09 0.9999998941072283 5.3035707297645586e-06
+  translation -0.49793 0.247763 -6.39438e-05
+  rotation 0 0 -1 -5.307179586466759e-06
   controller "Dijkstra_WEbots_controller"
   window "botstudio"
   camera_width 40
   camera_height 1
+  turretSlot [
+    InertialUnit {
+    }
+    GPS {
+    }
+  ]
   groundSensorsSlot [
     E-puckGroundSensors {
     }

@@ -53,7 +53,9 @@ node_coords = {
 }
 
 def distance(p1, p2):
-    return sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
+    dx = p1[0] - p2[0]
+    dy = p1[1] - p2[1]
+    return (dx**2 + dy**2) ** 0.5
 
 def dijkstra(graph, start):
     unvisited = set(graph.keys())
@@ -84,8 +86,8 @@ def shortest_path(graph, start, end):
 
 planned_path = shortest_path(graph, 'A1', 'D5')
 print('Planned path:', planned_path)
-path_index = 0  # Start at first node in the path
-NAV_TOLERANCE = 0.03  # 5 cm tolerance (adjust as needed)
+path_index = 0
+NAV_TOLERANCE = 0.03
 
 # ----------------- Hardware Setup -----------------
 
@@ -114,91 +116,108 @@ counter = 0
 COUNTER_MAX = 5
 COUNTER_STOP = 50
 state_updated = True
+position_valid = False  # ← New
 
+# ----------------- Main Loop -----------------
 while True:
-    # -------- See --------
-    if uart.any():
-        try:
-            msg_bytes = uart.readline()
-            msg_str = msg_bytes.decode('utf-8').strip()
+    try:
+        # -------- See --------
+        if uart.any():
+            try:
+                msg_bytes = uart.readline()
+                msg_str = msg_bytes.decode('utf-8').strip()
 
-            parts = msg_str.split(',')
+                parts = msg_str.split(',')
 
-            line_bits = parts[0]
-            if len(line_bits) != 3:
-                raise ValueError("Invalid sensor bits")
+                line_bits = parts[0]
+                if len(line_bits) != 3:
+                    raise ValueError("Invalid sensor bits")
 
-            current_x = float(parts[1])
-            current_y = float(parts[2])
-            current_yaw = float(parts[3])
-            
+                current_x = float(parts[1])
+                current_y = float(parts[2])
+                current_yaw = float(parts[3])
+                position_valid = True
 
-            line_left = line_bits[0] == '1'
-            line_center = line_bits[1] == '1'
-            line_right = line_bits[2] == '1'
+                line_left = line_bits[0] == '1'
+                line_center = line_bits[1] == '1'
+                line_right = line_bits[2] == '1'
 
-            # LED feedback for debugging
-            led_blue.value(line_left)
-            led_green.value(line_center)
-            led_red.value(line_right)
+                # LED feedback
+                led_blue.value(line_left)
+                led_green.value(line_center)
+                led_red.value(line_right)
 
-            uart2.write(current_state + '\n')
-            uart2.write(f"[Pos] X: {current_x:.2f}, Y: {current_y:.2f}, Yaw: {current_yaw:.2f}\n")
+                uart2.write(current_state + '\n')
+                uart2.write(f"[Pos] X: {current_x:.2f}, Y: {current_y:.2f}, Yaw: {current_yaw:.2f}\n".encode())
 
-        except Exception as e:
-            print("UART parse error:", e, "| Raw:", msg_bytes)
-            continue
-    
-    
-    #-----------Think --------
+            except Exception as e:
+                print("UART parse error:", e, "| Raw:", msg_bytes)
+                continue
 
-# -------- Normal Line Following --------
-    if current_state == 'forward':
-        counter = 0
-        if line_right and not line_left:
-            current_state = 'turn_right'
-            state_updated = True
-        elif line_left and not line_right:
-            current_state = 'turn_left'
-            state_updated = True
-        elif line_left and line_right and line_center:
-            current_state = 'turn_left'
-            state_updated = True
-        elif line_left and line_center and not line_right:
-            current_state = 'forward'
-            state_updated = True
-        elif button_right.value() == True:
-            current_state = 'stop'
-            state_updated = True
+        # -------- Navigation Logic --------
+        if position_valid and path_index < len(planned_path):
+            current_target = planned_path[path_index]
+            target_coords = node_coords[current_target]
+            dist = distance((current_x, current_y), target_coords)
 
-    elif current_state == 'turn_right':
-        if counter >= COUNTER_MAX:
-            current_state = 'forward'
-            state_updated = True
-        elif button_right.value() == True:
-            current_state = 'stop'
-            state_updated = True
+            uart2.write(f"[NodeCheck] Target: {current_target} | Pos: ({current_x:.2f}, {current_y:.2f}) | Dist: {dist:.3f}\n".encode())
 
-    elif current_state == 'turn_left':
-        if counter >= COUNTER_MAX:
-            current_state = 'forward'
-            state_updated = True
-        elif button_right.value() == True:
-            current_state = 'stop'
-            state_updated = True
+            if dist < NAV_TOLERANCE:
+                uart2.write(f"[Nav] Reached {current_target}, moving to next\n".encode())
+                path_index += 1
 
-    elif current_state == 'stop':
-        led_board.value(1)
-        if counter >= COUNTER_STOP:
-            current_state = 'forward'
-            state_updated = True
-            led_board.value(0)
+                if path_index < len(planned_path):
+                    current_target = planned_path[path_index]
+                    uart2.write(f"[Nav] New Target: {current_target}\n".encode())
+                else:
+                    uart2.write("[Nav] All nodes reached. Stopping.\n".encode())
+                    current_state = 'stop'
+                    state_updated = True
 
-    # -------- Act --------
-    if state_updated == True:
-        uart.write(current_state + '\n')
-        state_updated = False
+        # -------- Think --------
+        if current_state == 'forward':
+            counter = 0
+            if line_right and not line_left:
+                current_state = 'turn_right'
+                state_updated = True
+            elif line_left and not line_right:
+                current_state = 'turn_left'
+                state_updated = True
+            elif button_right.value():
+                current_state = 'stop'
+                state_updated = True
 
-    counter += 1
-    sleep(0.02)
+        elif current_state == 'turn_right':
+            if counter >= COUNTER_MAX:
+                current_state = 'forward'
+                state_updated = True
+            elif button_right.value():
+                current_state = 'stop'
+                state_updated = True
+
+        elif current_state == 'turn_left':
+            if counter >= COUNTER_MAX:
+                current_state = 'forward'
+                state_updated = True
+            elif button_right.value():
+                current_state = 'stop'
+                state_updated = True
+
+        elif current_state == 'stop':
+            led_board.value(1)
+            if counter >= COUNTER_STOP:
+                current_state = 'forward'
+                state_updated = True
+                led_board.value(0)
+
+        # -------- Act --------
+        if state_updated:
+            uart.write(current_state + '\n')
+            state_updated = False
+
+        counter += 1
+        sleep(0.02)
+
+    except Exception as e:
+        print("Loop error:", e)
 
