@@ -85,7 +85,7 @@ def shortest_path(graph, start, end):
 planned_path = shortest_path(graph, 'A1', 'D5')
 print('Planned path:', planned_path)
 path_index = 0  # Start at first node in the path
-NAV_TOLERANCE = 0.05  # 5 cm tolerance (adjust as needed)
+NAV_TOLERANCE = 0.03  # 5 cm tolerance (adjust as needed)
 
 # ----------------- Hardware Setup -----------------
 
@@ -103,7 +103,7 @@ while button_left() == False:
     led_board.value(not led_board())
 
 uart = UART(1, 115200, tx=1, rx=3)
-
+uart2 = UART(2, baudrate=115200, tx=17, rx=16)
 
 line_left = False
 line_center = False
@@ -142,12 +142,17 @@ while True:
             led_green.value(line_center)
             led_red.value(line_right)
 
+            uart2.write(current_state + '\n')
+            uart2.write(f"[Pos] X: {current_x:.2f}, Y: {current_y:.2f}, Yaw: {current_yaw:.2f}\n")
+
         except Exception as e:
             print("UART parse error:", e, "| Raw:", msg_bytes)
             continue
     
     
     #-----------Think --------
+
+# -------- Normal Line Following --------
     if current_state == 'forward':
         counter = 0
         if line_right and not line_left:
@@ -196,5 +201,4 @@ while True:
 
     counter += 1
     sleep(0.02)
-
 
