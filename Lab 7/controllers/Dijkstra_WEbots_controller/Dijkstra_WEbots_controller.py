@@ -58,7 +58,9 @@ rightMotor.setVelocity(0.0)
 # Initialize GPS device
 gps = robot.getDevice('gps')
 gps.enable(timestep)
-
+# Initialize Inertial Unit device
+inertial_unit = robot.getDevice("inertial unit")
+inertial_unit.enable(timestep)
 
 #-------------------------------------------------------
 # Main loop:
@@ -84,6 +86,9 @@ while robot.step(timestep) != -1:
     # Read GPS position
     position = gps.getValues()
     x, y, z = position
+    #read inertial position
+    orientation = inertial_unit.getRollPitchYaw()
+    yaw = orientation[2]  # yaw is heading (rotation around Z)
     
     # Build the message to be sent to the ESP32 with the ground
     # sensor data: 0 = line detected; 1 = line not detected
@@ -96,7 +101,7 @@ while robot.step(timestep) != -1:
     
     
     # Construct message: line sensors + GPS (x, y)
-    message = f"{line_state},{x:.2f},{y:.2f}\n"
+    message = f"{line_state},{x:.2f},{y:.2f},{yaw:.2f}\n"
     msg_bytes = bytes(message, 'UTF-8')
     
 
@@ -106,7 +111,8 @@ while robot.step(timestep) != -1:
 
     # Serial communication: if something is received, then update the current state
     if ser.in_waiting:
-        value = str(ser.readline(), 'UTF-8')[:-1]  # ignore the last character
+        value = str(ser.readline(), 'UTF-8').strip()
+        print("Received from ESP32:", value)
         current_state = value
 
     # Update speed according to the current state
@@ -136,7 +142,7 @@ while robot.step(timestep) != -1:
     rightMotor.setVelocity(rightSpeed)
    
     # Print sensor message and current state for debugging
-    print(f'Sensor message: {msg_bytes} - Current state: {current_state} - GPS position: x={x:.2f}, y={y:.2f}, z={z:.2f}')
+    print(f"Sensor message: {msg_bytes} - Current state: {current_state} - GPS position: x={x:.2f}, y={y:.2f}, yaw={yaw:.2f}")
     # Send message to the microcontroller 
     ser.write(msg_bytes)  
 
