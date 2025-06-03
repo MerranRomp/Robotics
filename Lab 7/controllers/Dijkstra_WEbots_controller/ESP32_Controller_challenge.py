@@ -36,15 +36,6 @@ node_coords = {
     'C9': (0.50, 0.00), 'D1': (-0.50, -0.10), 'D5': (0.00, -0.10), 'E1': (-0.50, -0.25), 'E5': (0.00, -0.25),
     'E6': (0.20, -0.25), 'E7': (0.30, -0.25), 'E8': (0.40, -0.25), 'E9': (0.50, -0.25)
 }
-from machine import Pin, UART
-from time import sleep
-from math import sqrt, atan2, pi
-
-# ----------------- Dijkstra and Graph Setup -----------------
-
-# (Unchanged graph and node_coords...)
-
-# Functions unchanged
 
 def distance(p1, p2):
     dx = p1[0] - p2[0]
