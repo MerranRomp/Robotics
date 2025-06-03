@@ -42,6 +42,10 @@ DEF E_PUCK E-puck {
   window "botstudio"
   camera_width 40
   camera_height 1
+  turretSlot [
+    GPS {
+    }
+  ]
   groundSensorsSlot [
     E-puckGroundSensors {
     }
