@@ -1,6 +1,6 @@
 from machine import Pin, UART
 from time import sleep
-from math import sqrt
+from math import sqrt, atan2, pi
 
 # ----------------- Dijkstra and Graph Setup -----------------
 
@@ -31,31 +31,32 @@ graph = {
 }
 
 node_coords = {
-    'A1': (-0.50, 0.25),
-    'A2': (-0.40, 0.25),
-    'A3': (-0.30, 0.25),
-    'A4': (-0.20, 0.25),
-    'A5': (0.00, 0.25),
-    'A9': (0.50, 0.25),
-    'B5': (0.00, 0.10),
-    'B9': (0.50, 0.10),
-    'C1': (-0.50, 0.00),
-    'C5': (0.00, 0.00),
-    'C9': (0.50, 0.00),
-    'D1': (-0.50, -0.10),
-    'D5': (0.00, -0.10),
-    'E1': (-0.50, -0.25),
-    'E5': (0.00, -0.25),
-    'E6': (0.20, -0.25),
-    'E7': (0.30, -0.25),
-    'E8': (0.40, -0.25),
-    'E9': (0.50, -0.25)
+    'A1': (-0.50, 0.25), 'A2': (-0.40, 0.25), 'A3': (-0.30, 0.25), 'A4': (-0.20, 0.25), 'A5': (0.00, 0.25),
+    'A9': (0.50, 0.25), 'B5': (0.00, 0.10), 'B9': (0.50, 0.10), 'C1': (-0.50, 0.00), 'C5': (0.00, 0.00),
+    'C9': (0.50, 0.00), 'D1': (-0.50, -0.10), 'D5': (0.00, -0.10), 'E1': (-0.50, -0.25), 'E5': (0.00, -0.25),
+    'E6': (0.20, -0.25), 'E7': (0.30, -0.25), 'E8': (0.40, -0.25), 'E9': (0.50, -0.25)
 }
+from machine import Pin, UART
+from time import sleep
+from math import sqrt, atan2, pi
+
+# ----------------- Dijkstra and Graph Setup -----------------
+
+# (Unchanged graph and node_coords...)
+
+# Functions unchanged
 
 def distance(p1, p2):
     dx = p1[0] - p2[0]
     dy = p1[1] - p2[1]
     return (dx**2 + dy**2) ** 0.5
+
+def normalize_angle(angle):
+    while angle > pi:
+        angle -= 2 * pi
+    while angle < -pi:
+        angle += 2 * pi
+    return angle
 
 def dijkstra(graph, start):
     unvisited = set(graph.keys())
@@ -116,7 +117,9 @@ counter = 0
 COUNTER_MAX = 5
 COUNTER_STOP = 50
 state_updated = True
-position_valid = False  # ← New
+position_valid = False
+turning_to_next_node = False
+turn_target_angle = 0.0
 
 # ----------------- Main Loop -----------------
 while True:
@@ -126,7 +129,6 @@ while True:
             try:
                 msg_bytes = uart.readline()
                 msg_str = msg_bytes.decode('utf-8').strip()
-
                 parts = msg_str.split(',')
 
                 line_bits = parts[0]
@@ -142,7 +144,6 @@ while True:
                 line_center = line_bits[1] == '1'
                 line_right = line_bits[2] == '1'
 
-                # LED feedback
                 led_blue.value(line_left)
                 led_green.value(line_center)
                 led_red.value(line_right)
@@ -163,12 +164,18 @@ while True:
             uart2.write(f"[NodeCheck] Target: {current_target} | Pos: ({current_x:.2f}, {current_y:.2f}) | Dist: {dist:.3f}\n".encode())
 
             if dist < NAV_TOLERANCE:
-                uart2.write(f"[Nav] Reached {current_target}, moving to next\n".encode())
-                path_index += 1
+                uart2.write(f"[Nav] Reached {current_target}\n".encode())
 
-                if path_index < len(planned_path):
-                    current_target = planned_path[path_index]
-                    uart2.write(f"[Nav] New Target: {current_target}\n".encode())
+                if path_index + 1 < len(planned_path):
+                    next_target = planned_path[path_index + 1]
+                    from_coords = node_coords[current_target]
+                    to_coords = node_coords[next_target]
+                    dx = to_coords[0] - from_coords[0]
+                    dy = to_coords[1] - from_coords[1]
+                    turn_target_angle = atan2(dy, dx)
+                    current_state = 'align'
+                    state_updated = True
+                    uart2.write(f"[Turn] Preparing to face {next_target}\n".encode())
                 else:
                     uart2.write("[Nav] All nodes reached. Stopping.\n".encode())
                     current_state = 'stop'
@@ -209,6 +216,23 @@ while True:
                 current_state = 'forward'
                 state_updated = True
                 led_board.value(0)
+
+        elif current_state == 'align':
+            yaw_error = normalize_angle(turn_target_angle - current_yaw)
+            uart2.write(f"[Align] Target: {turn_target_angle:.2f}, Yaw: {current_yaw:.2f}, Err: {yaw_error:.2f}\n".encode())
+
+            if abs(yaw_error) < 0.1:
+                path_index += 1
+                current_state = 'forward'
+                state_updated = True
+                uart2.write("[Align] Done. Resuming forward\n".encode())
+            elif abs(yaw_error) < 0.25:
+                current_state = 'stop'
+                state_updated = True
+                uart2.write("[Align] Close enough. Stopping to reduce overshoot\n".encode())
+            else:
+                current_state = 'turn_left' if yaw_error > 0 else 'turn_right'
+                state_updated = True
 
         # -------- Act --------
         if state_updated:
