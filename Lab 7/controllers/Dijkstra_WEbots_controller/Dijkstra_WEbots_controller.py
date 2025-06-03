@@ -137,7 +137,6 @@ while robot.step(timestep) != -1:
    
     # Print sensor message and current state for debugging
     print(f'Sensor message: {msg_bytes} - Current state: {current_state} - GPS position: x={x:.2f}, y={y:.2f}, z={z:.2f}')
-
     # Send message to the microcontroller 
     ser.write(msg_bytes)  
 

@@ -30,6 +30,27 @@ graph = {
     'E9': [('E8', 1), ('C9', 1)],
 }
 
+node_coords = {
+    'A1': (-0.50, 0.25),
+    'A2': (-0.40, 0.25),
+    'A3': (-0.30, 0.25),
+    'A4': (-0.20, 0.25),
+    'A5': (0.00, 0.25),
+    'A9': (0.50, 0.25),
+    'B5': (0.00, 0.10),
+    'B9': (0.50, 0.10),
+    'C1': (-0.50, 0.00),
+    'C5': (0.00, 0.00),
+    'C9': (0.50, 0.00),
+    'D1': (-0.50, -0.10),
+    'D5': (0.00, -0.10),
+    'E1': (-0.50, -0.25),
+    'E5': (0.00, -0.25),
+    'E6': (0.20, -0.25),
+    'E7': (0.30, -0.25),
+    'E8': (0.40, -0.25),
+    'E9': (0.50, -0.25)
+}
 
 def dijkstra(graph, start):
     unvisited = set(graph.keys())
@@ -60,9 +81,6 @@ def shortest_path(graph, start, end):
 
 planned_path = shortest_path(graph, 'A1', 'D5')
 print('Planned path:', planned_path)
-current_path_index = 0  # Start at first node in path
-current_target_node = planned_path[current_path_index]
-next_target_node = planned_path[current_path_index + 1] if current_path_index + 1 < len(planned_path) else None
 
 # ----------------- Hardware Setup -----------------
 
@@ -92,55 +110,35 @@ COUNTER_MAX = 5
 COUNTER_STOP = 50
 state_updated = True
 
-node_detected = False
-node_cooldown = 0
-
 while True:
     # -------- See --------
     if uart.any():
-        msg_bytes = uart.read()
-        msg_str = str(msg_bytes, 'UTF-8')
+        msg_bytes = uart.readline()
+        try:
+            msg_str = msg_bytes.decode('utf-8').strip()
+            parts = msg_str.split(',')
+            if len(parts) != 3:
+                raise ValueError("Invalid message format")
 
-        if msg_str[-4:-3] == '1':
-            line_left = True
-            led_blue.on()
-        else:
-            line_left = False
-            led_blue.off()
+            line_bits = parts[0]
+            if len(line_bits) != 3:
+                raise ValueError("Invalid sensor bits")
 
-        if msg_str[-3:-2] == '1':
-            line_center = True
-            led_green.on()
-        else:
-            line_center = False
-            led_green.off()
+            current_x = float(parts[1])
+            current_y = float(parts[2])
 
-        if msg_str[-2:-1] == '1':
-            line_right = True
-            led_red.on()
-        else:
-            line_right = False
-            led_red.off()
+            line_left = line_bits[0] == '1'
+            line_center = line_bits[1] == '1'
+            line_right = line_bits[2] == '1'
 
-    # --- Enhanced Node Detection ---
-    if not node_detected:
-        if (line_left and line_center and line_right) or (not line_left and not line_center and not line_right):
-            node_detected = True
-            node_cooldown = 20  # ~0.4 sec at 20ms step
-            
-            # Check if we're at the next expected node in the path
-            if current_path_index + 1 < len(planned_path):
-                print(f">>> Reached {planned_path[current_path_index]}. Next target: {planned_path[current_path_index + 1]}")
-                current_path_index += 1
-                current_target_node = planned_path[current_path_index]
-                next_target_node = planned_path[current_path_index + 1] if current_path_index + 1 < len(planned_path) else None
-            else:
-                print(">>> Reached final destination!")
+            led_blue.value(line_left)
+            led_green.value(line_center)
+            led_red.value(line_right)
 
-    if node_cooldown > 0:
-        node_cooldown -= 1
-    else:
-        node_detected = False
+        except Exception as e:
+            print("UART parse error:", e, "| Raw:", msg_bytes)
+            continue  # skip to next loop
+
 
     # -------- Think --------
     if current_state == 'forward':
