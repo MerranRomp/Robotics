@@ -17,6 +17,7 @@ except:
 
 MAX_SPEED = 6.28
 speed = 0.4 * MAX_SPEED
+test = 0
 
 # create the Robot instance for the simulation.
 robot = Robot()
