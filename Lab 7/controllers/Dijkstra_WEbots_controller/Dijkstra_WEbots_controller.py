@@ -93,7 +93,6 @@ while robot.step(timestep) != -1:
     # Build the message to be sent to the ESP32 with the ground
     # sensor data: 0 = line detected; 1 = line not detected
     # Build the line sensor message
-    # Build the line sensor message
     line_state = ''
     line_state += '1' if line_left else '0'
     line_state += '1' if line_center else '0'
