@@ -36,20 +36,29 @@ node_coords = {
     'C9': (0.50, 0.00), 'D1': (-0.50, -0.10), 'D5': (0.00, -0.10), 'E1': (-0.50, -0.25), 'E5': (0.00, -0.25),
     'E6': (0.20, -0.25), 'E7': (0.30, -0.25), 'E8': (0.40, -0.25), 'E9': (0.50, -0.25)
 }
+from machine import Pin, UART
+from time import sleep
+from math import sqrt, atan2, pi
 
-def distance(p1, p2):
+# ----------------- Dijkstra and Graph Setup -----------------
+
+# (Unchanged graph and node_coords...)
+
+# Functions unchanged
+
+def distance(p1, p2): # Calculate Euclidean distance between two points
     dx = p1[0] - p2[0]
     dy = p1[1] - p2[1]
     return (dx**2 + dy**2) ** 0.5
 
-def normalize_angle(angle):
+def normalize_angle(angle): # Normalize angle to the range [-pi, pi]
     while angle > pi:
         angle -= 2 * pi
     while angle < -pi:
         angle += 2 * pi
     return angle
 
-def dijkstra(graph, start):
+def dijkstra(graph, start):# Dijkstra's algorithm to find shortest paths from start node
     unvisited = set(graph.keys())
     distances = {node: float('inf') for node in graph}
     previous = {node: None for node in graph}
@@ -67,7 +76,7 @@ def dijkstra(graph, start):
 
     return distances, previous
 
-def shortest_path(graph, start, end):
+def shortest_path(graph, start, end):# Find the shortest path from start to end node using Dijkstra's algorithm
     _, previous = dijkstra(graph, start)
     path = []
     node = end
@@ -76,10 +85,7 @@ def shortest_path(graph, start, end):
         node = previous[node]
     return path
 
-planned_path = shortest_path(graph, 'A1', 'D5')
-print('Planned path:', planned_path)
-path_index = 0
-NAV_TOLERANCE = 0.03
+
 
 # ----------------- Hardware Setup -----------------
 
@@ -91,44 +97,55 @@ led_red = Pin(21, Pin.OUT)
 button_left = Pin(34, Pin.IN, Pin.PULL_DOWN)
 button_right = Pin(35, Pin.IN, Pin.PULL_DOWN)
 
+#start button sequence
 print("Click the button on the ESP32 to continue. Then, close Thonny and run the Webots simulation.")
 while button_left() == False:
     sleep(0.25)
     led_board.value(not led_board())
 
+# Initialize UART for communication with the robot
 uart = UART(1, 115200, tx=1, rx=3)
 uart2 = UART(2, baudrate=115200, tx=17, rx=16)
 
+# Initialize line sensors with default values
 line_left = False
 line_center = False
 line_right = False
 
-current_state = 'forward'
-counter = 0
-COUNTER_MAX = 5
-COUNTER_STOP = 50
-state_updated = True
-position_valid = False
-turning_to_next_node = False
-turn_target_angle = 0.0
+current_state = 'forward' # Initial state of the robot
+counter = 0 # Counter for turning states
+COUNTER_MAX = 5 # Maximum counter for turning states
+COUNTER_STOP = 50 # Maximum counter for turning states
+state_updated = True # Whether the state has been updated for sending to the robot
+position_valid = False # Whether the robot's position is valid
+turning_to_next_node = False # Whether the robot is currently turning to face the next node
+turn_target_angle = 0.0 # Angle to turn to face the next node
+path_index = 0 # Index of the current target node in the planned path
+NAV_TOLERANCE = 0.02 # Tolerance for reaching a node
+
+# ----------------- Path Planning -----------------
+planned_path = shortest_path(graph, 'A1', 'E9')
+print('Planned path:', planned_path)
+
 
 # ----------------- Main Loop -----------------
 while True:
     try:
         # -------- See --------
+        #Read uart for incoming messages
         if uart.any():
             try:
-                msg_bytes = uart.readline()
-                msg_str = msg_bytes.decode('utf-8').strip()
-                parts = msg_str.split(',')
+                msg_bytes = uart.readline() # Read a line from UART
+                msg_str = msg_bytes.decode('utf-8').strip() # Decode the message
+                parts = msg_str.split(',') # Split the message into parts
 
-                line_bits = parts[0]
+                line_bits = parts[0] # First part is the line sensor bits
                 if len(line_bits) != 3:
                     raise ValueError("Invalid sensor bits")
 
-                current_x = float(parts[1])
-                current_y = float(parts[2])
-                current_yaw = float(parts[3])
+                current_x = float(parts[1]) # Second part is the current X position
+                current_y = float(parts[2]) # Third part is the current Y position
+                current_yaw = float(parts[3]) # Fourth part is the current yaw angle
                 position_valid = True
 
                 line_left = line_bits[0] == '1'
@@ -145,8 +162,9 @@ while True:
             except Exception as e:
                 print("UART parse error:", e, "| Raw:", msg_bytes)
                 continue
-
+        # -------- Think --------
         # -------- Navigation Logic --------
+        # Box of black magic
         if position_valid and path_index < len(planned_path):
             current_target = planned_path[path_index]
             target_coords = node_coords[current_target]
@@ -172,7 +190,7 @@ while True:
                     current_state = 'stop'
                     state_updated = True
 
-        # -------- Think --------
+        #state machine logic
         if current_state == 'forward':
             counter = 0
             if line_right and not line_left:
@@ -201,13 +219,8 @@ while True:
                 current_state = 'stop'
                 state_updated = True
 
-        elif current_state == 'stop':
-            led_board.value(1)
-            if counter >= COUNTER_STOP:
-                current_state = 'forward'
-                state_updated = True
-                led_board.value(0)
 
+        # -------- Align Logic --------
         elif current_state == 'align':
             yaw_error = normalize_angle(turn_target_angle - current_yaw)
             uart2.write(f"[Align] Target: {turn_target_angle:.2f}, Yaw: {current_yaw:.2f}, Err: {yaw_error:.2f}\n".encode())
@@ -218,7 +231,7 @@ while True:
                 state_updated = True
                 uart2.write("[Align] Done. Resuming forward\n".encode())
             elif abs(yaw_error) < 0.25:
-                current_state = 'stop'
+                current_state = 'forward'
                 state_updated = True
                 uart2.write("[Align] Close enough. Stopping to reduce overshoot\n".encode())
             else:
@@ -226,6 +239,7 @@ while True:
                 state_updated = True
 
         # -------- Act --------
+        #send state over uart
         if state_updated:
             uart.write(current_state + '\n')
             state_updated = False
@@ -235,4 +249,6 @@ while True:
 
     except Exception as e:
         print("Loop error:", e)
+
+
 

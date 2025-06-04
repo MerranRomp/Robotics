@@ -7,7 +7,7 @@ import numpy as np
 import serial
 try:
     # Change the port parameter according to your system
-    ser =  serial.Serial(port='COM3', baudrate=115200, timeout=5) 
+    ser =  serial.Serial(port='COM7', baudrate=115200, timeout=5) 
 except:
     print("Communication failed. Check the cable connections and serial settings 'port' and 'baudrate'.")
     raise
@@ -32,7 +32,6 @@ current_state = 'forward'
 # Initialize devices
 
 # proximity sensors
-# Ref.: https://cyberbotics.com/doc/guide/tutorial-4-more-about-controllers?tab-language=python#understand-the-e-puck-model
 ps = []
 psNames = ['ps0', 'ps1', 'ps2', 'ps3', 'ps4', 'ps5', 'ps6', 'ps7']
 for i in range(8):
@@ -64,10 +63,8 @@ inertial_unit.enable(timestep)
 
 #-------------------------------------------------------
 # Main loop:
-# perform simulation steps until Webots is stopping the controller
-# Implements the see-think-act cycle
 
-while robot.step(timestep) != -1:
+while robot.step(timestep) != -1: #timestep
 
     ############################################
     #                  See                     #
