@@ -3,7 +3,7 @@ from time import sleep
 from math import sqrt, atan2, pi
 
 # ----------------- Dijkstra and Graph Setup -----------------
-
+# this graph represents a simple network of nodes with weighted edges
 graph = {
     'A1': [('A2', 1), ('C1', 2.5)],
     'A2': [('A1', 1), ('A3', 1)],
@@ -29,7 +29,7 @@ graph = {
     'E8': [('E7', 1), ('E9', 1)],
     'E9': [('E8', 1), ('C9', 2.5)],
 }
-
+#these are the coordinates of the nodes in the graph
 node_coords = {
     'A1': (-0.50, 0.25), 'A2': (-0.40, 0.25), 'A3': (-0.30, 0.25), 'A4': (-0.20, 0.25), 'A5': (0.00, 0.25),
     'A9': (0.50, 0.25), 'B5': (0.00, 0.10), 'B9': (0.50, 0.10), 'C1': (-0.50, 0.00), 'C5': (0.00, 0.00),
