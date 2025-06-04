@@ -6,6 +6,7 @@ Numpy 2.2.5
 Thonny 3.1.1
 ESP32 with micropython 1.25.0
 Webots R2025a
+(Matplotlib if you want the plot on the Webots)
 
 How do you run the code:
 1. Get you ESP32 connected to the pc and install micropython on it
@@ -18,12 +19,7 @@ How do you run the code:
 To change the path go in the ESP32 code in line 61 and change the location of the nodes (do make sure the e-puck starts at the first node) and when u changed that you can restart from step 5
 If you dont have a button on your ESP32 then connect a button to D34
 
-Improvement tracking
-1: 29/05/2025: Default setup: 1:23.4
-2: 29/05/2025: move forward @ T junctions 1:22.8
-3: 29/05/2025: Turn harder on left turns 1:08.99
-3: 29/05/2025: up speeds on everything? full speed on conrners 1:05.4
-
+The graph and node infromation 
 graph = {
     'A1': [('A2', 1), ('C1', 2.5)],
     'A2': [('A1', 1), ('A3', 1)],

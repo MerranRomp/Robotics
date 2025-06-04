@@ -1,5 +1,6 @@
 from controller import Robot, GPS, InertialUnit
 import math
+import matplotlib.pyplot as plt
 
 # ---------- Graph with distances ----------
 graph = {
@@ -76,6 +77,31 @@ def shortest_path(graph, start, end):
         node = previous[node]
     return path
 
+# ---------- Visualization ----------
+def draw_map(path, current_pos=None):
+    plt.clf()
+    for node, neighbors in graph.items():
+        for neighbor, _ in neighbors:
+            x1, y1 = node_coords[node]
+            x2, y2 = node_coords[neighbor]
+            plt.plot([x1, x2], [y1, y2], 'gray', linewidth=0.5)
+
+    for node, (x, y) in node_coords.items():
+        plt.plot(x, y, 'ko', markersize=4)
+        plt.text(x + 0.01, y + 0.01, node, fontsize=8)
+
+    path_x = [node_coords[n][0] for n in path]
+    path_y = [node_coords[n][1] for n in path]
+    plt.plot(path_x, path_y, 'b--', linewidth=2, label='Planned Path')
+
+    if current_pos:
+        plt.plot(current_pos[0], current_pos[1], 'ro', markersize=8, label='Robot')
+
+    plt.axis('equal')
+    plt.title('Robot Navigation Path')
+    plt.legend()
+    plt.pause(0.001)
+
 # ---------- Setup ----------
 robot = Robot()
 timestep = int(robot.getBasicTimeStep())
@@ -93,7 +119,6 @@ gps.enable(timestep)
 inertial_unit = robot.getDevice('inertial unit')
 inertial_unit.enable(timestep)
 
-# Grayscale sensors
 gs = []
 gsNames = ['gs0', 'gs1', 'gs2']
 for name in gsNames:
@@ -106,17 +131,21 @@ MAX_SPEED = 6.28
 BASE_SPEED = 0.35 * MAX_SPEED
 MIN_SPEED = 0.2 * MAX_SPEED
 ROTATION_SPEED = 0.25 * MAX_SPEED
-ANGLE_TOLERANCE = 0.15  # ~8.5°
+ANGLE_TOLERANCE = 0.15
 DISTANCE_TOLERANCE = 0.035
 
 # ---------- Navigation ----------
 start_node = 'A1'
-goal_node = 'E9'
+goal_node = 'B9'
 path = shortest_path(graph, start_node, goal_node)
 print("Planned path:", path)
 
 current_target_index = 1
 state = "TURNING"
+
+# Enable interactive plotting
+plt.ion()
+draw_map(path)
 
 # ---------- Helper Functions ----------
 def get_heading():
@@ -146,12 +175,11 @@ def distance_to_target(pos, target):
 
 def line_following(distance_to_node):
     vals = [sensor.getValue() for sensor in gs]
-    threshold = 500  # Adjust this based on floor contrast
+    threshold = 500
     left = vals[0] < threshold
     center = vals[1] < threshold
     right = vals[2] < threshold
 
-    # Dynamic speed scaling by distance
     scale = min(1.0, distance_to_node / 0.3)
     speed = MIN_SPEED + scale * (BASE_SPEED - MIN_SPEED)
 
@@ -166,12 +194,14 @@ def line_following(distance_to_node):
     elif center and right and not left:
         return speed, 0.3 * speed
     else:
-        return 0.5 * speed, 0.5 * speed  # fallback: move forward slowly
+        return 0.5 * speed, 0.5 * speed
 
 # ---------- Main Loop ----------
 while robot.step(timestep) != -1:
     current_pos = gps.getValues()[0:2]
     heading = get_heading()
+
+    draw_map(path, current_pos)
 
     if current_target_index >= len(path):
         leftMotor.setVelocity(0)
@@ -205,3 +235,8 @@ while robot.step(timestep) != -1:
 
     leftMotor.setVelocity(leftSpeed)
     rightMotor.setVelocity(rightSpeed)
+
+# Final plot after simulation
+plt.ioff()
+draw_map(path, current_pos)
+plt.show()
