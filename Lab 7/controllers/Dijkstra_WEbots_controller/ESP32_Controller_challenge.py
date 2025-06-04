@@ -204,7 +204,7 @@ while True:
                 state_updated = True
 
         elif current_state == 'turn_right':
-            if counter >= COUNTER_MAX:
+            if counter >= 3:
                 current_state = 'forward'
                 state_updated = True
             elif button_right.value():
@@ -212,7 +212,7 @@ while True:
                 state_updated = True
 
         elif current_state == 'turn_left':
-            if counter >= COUNTER_MAX:
+            if counter >= 3:
                 current_state = 'forward'
                 state_updated = True
             elif button_right.value():
