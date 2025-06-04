@@ -9,8 +9,8 @@ EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023a/project
 WorldInfo {
 }
 Viewpoint {
-  orientation 0.41623657436613504 -0.41964179413480424 -0.8066274721178713 4.42420448318617
-  position -0.14283519620402707 -1.0492792146421588 1.258165501202229
+  orientation 0.35686366234161987 -0.39925750459232534 -0.8445364240379662 4.560044375425074
+  position -0.09207691272414154 -1.1191708369839415 1.1700337078106409
   follow "e-puck"
 }
 TexturedBackground {
@@ -42,6 +42,12 @@ DEF E_PUCK E-puck {
   window "botstudio"
   camera_width 40
   camera_height 1
+  turretSlot [
+    InertialUnit {
+    }
+    GPS {
+    }
+  ]
   groundSensorsSlot [
     E-puckGroundSensors {
     }
