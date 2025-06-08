@@ -1,0 +1,51 @@
+Sensor output range from 0-3.3V
+after calibrating we got the following values:
+
+min_vals = [294, 239, 33, 39, 0] (black)
+max_vals = [1023, 1023, 785, 938, 1023] (white)
+
+we can use these values to determine weather a measurements is above a white or black surface.
+
+we can do that as follows:
+
+
+#####
+min_vals = [294, 239, 33, 39, 0]
+max_vals = [1023, 1023, 785, 938, 1023]
+
+# returns a value between 0-100 where the after accounting for the variance in the sensor readings.
+def normalize(val, i):
+    if max_vals[i] == min_vals[i]:  # Prevent division by 0
+        return 0
+    return int(100 * (val - min_vals[i]) / (max_vals[i] - min_vals[i]))
+
+# we can then compare it to a set value and store the measurements in an array for later use:
+
+line_threshold = 50
+binary = [1 if normalize(reading, i) < line_threshold else 0 for i, reading in enumerate(sensor_vals)]
+
+# we can then use a weighted average of the readings to estimate how far left or right the cart is from the line:
+
+# Assign position weights (e.g., -2 to +2)
+weights = [-2, -1, 0, 1, 2]
+
+# Option 1: Binary position (simple)
+line_pos = sum(w * b for w, b in zip(weights, binary)) / max(sum(binary), 1)
+
+# Option 2: Weighted by normalized inverse (more accurate)
+norm = [normalize(reading, i) for i, reading in enumerate(sensor_vals)]
+inv = [100 - v for v in norm]  # Invert: darker = higher
+line_pos = sum(w * v for w, v in zip(weights, inv)) / max(sum(inv), 1)
+
+# this gives us a value which we interperate as follows:
+
+line_pos = 0: line is centered
+line_pos < 0: line is left
+line_pos > 0: line is right
+
+# this we can then feed into a PID for smooth steering:
+
+error = line_pos
+turn = Kp * error  # Kp: tuning gain
+left_motor = base_speed - turn
+right_motor = base_speed + turn
