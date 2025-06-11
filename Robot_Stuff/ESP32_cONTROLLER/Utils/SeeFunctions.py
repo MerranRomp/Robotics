@@ -47,3 +47,16 @@ def normalize(val, i):
         return 0
     return int(100 * (val - min_vals[i]) / (max_vals[i] - min_vals[i]))
 
+def get_normalized(sensor_vals):
+    return [normalize(reading, i) for i, reading in enumerate(sensor_vals)]
+
+def get_binary(normalized_vals, threshold=50):
+    return [1 if v < threshold else 0 for v in normalized_vals]
+
+def get_inverse(normalized_vals):
+    return [100 - v for v in normalized_vals]
+
+
+
+ ##----------------IR GROUND SENSOR----------------##
+
