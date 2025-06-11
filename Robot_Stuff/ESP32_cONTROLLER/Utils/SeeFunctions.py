@@ -15,5 +15,7 @@ def setup_VL53L0X(): # Function to setup the VL53L0X Time-of-Flight sensor
 def TOF_read_distance():
     return tof.read() # Read distance from the TOF sensor in mm
 
-
+def filtered_distance(tof, previous, alpha=0.3):# Function to filter the distance reading from the TOF sensor
+    new = TOF_read_distance(tof)
+    return alpha * new + (1 - alpha) * previous
 
