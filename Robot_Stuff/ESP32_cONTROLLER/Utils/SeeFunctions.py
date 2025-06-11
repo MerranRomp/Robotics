@@ -27,13 +27,12 @@ def filtered_distance(tof, previous, alpha=0.3):# Function to filter the distanc
 
 def setup_ir_sensors():
     # Define the analog pin numbers (adjust as needed for your board)
-    sensor_pins = [32, 33, 34, 35, 36]  # ADC-capable pins on ESP32
+    sensor_pins = [32, 33, 34, 35, 2]  # ADC-capable pins on ESP32
     sensors = [ADC(Pin(pin)) for pin in sensor_pins]
 
-    # Configure ADC resolution and range (ESP32)
-    for s in sensors:
-        s.atten(ADC.ATTN_11DB)       # 0–3.3V range
-        s.width(ADC.WIDTH_10BIT)     # 0–1023 resolution
+    adc_pins = [ADC(Pin(pin)) for pin in sensor_pins]
+    for adc in adc_pins:
+        adc.atten(ADC.ATTN_11DB)  # Full 0-3.3V range (adjust as needed)
 
     return sensors
 
@@ -41,6 +40,10 @@ def setup_ir_sensors():
 min_vals = [294, 239, 33, 39, 0]
 max_vals = [1023, 1023, 785, 938, 1023]
 
+
+def read_sensors():
+    """Read raw values from line sensors (0–4095)."""
+    return [adc.read() for adc in adc_pins]
 
 def normalize(val, i):
     if max_vals[i] == min_vals[i]:
@@ -58,5 +61,5 @@ def get_inverse(normalized_vals):
 
 
 
- ##----------------IR GROUND SENSOR----------------##
+ ##--------------------------------##
 
