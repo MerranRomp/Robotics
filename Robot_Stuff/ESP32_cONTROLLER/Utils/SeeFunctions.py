@@ -1,6 +1,13 @@
 from machine import Pin, I2C, ADC
 from time import sleep
 
+IRsensors = []
+min_vals = [294, 239, 33, 39, 0]
+max_vals = [1023, 1023, 785, 938, 1023]
+threshold = 50
+
+
+
 
  ##----------------TOF SENSOR----------------##
 from VL53L0X import VL53L0X  # Import the VL53L0X library for the Time-of-Flight sensor
@@ -25,41 +32,39 @@ def filtered_distance(tof, previous, alpha=0.3):# Function to filter the distanc
  ##----------------IR GROUND SENSOR----------------##
 
 
-def setup_ir_sensors():
-    # Define the analog pin numbers (adjust as needed for your board)
-    sensor_pins = [32, 33, 34, 35, 2]  # ADC-capable pins on ESP32
-    sensors = [ADC(Pin(pin)) for pin in sensor_pins]
 
-    adc_pins = [ADC(Pin(pin)) for pin in sensor_pins]
-    for adc in adc_pins:
-        adc.atten(ADC.ATTN_11DB)  # Full 0-3.3V range (adjust as needed)
+sensors = []  # Global list to hold ADC sensor objects
+def setup_ir_sensors(*pins):
+    global IRsensors
+    IRsensors = []
+    for pin in pins:
+        adc = ADC(Pin(pin))
+        adc.atten(ADC.ATTN_11DB)  # 0-3.3V range
+        adc.width(ADC.WIDTH_10BIT)  # 0-1023 resolution
+        IRsensors.append(adc)
 
-    return sensors
+def read_raw_values():
+    return [sensor.read() for sensor in IRsensors]
 
-# Calibration values
-min_vals = [294, 239, 33, 39, 0]
-max_vals = [1023, 1023, 785, 938, 1023]
+def read_normalized_values():
+    raw = read_raw_values()
+    normalized = []
+    for val, min_v, max_v in zip(raw, min_vals, max_vals):
+        norm = (val - min_v) / (max_v - min_v) * 100
+        norm = max(0, min(100, int(norm)))  # Clamp between 0–100
+        normalized.append(norm)
+    return normalized
+
+def read_binary_values():
+    norm = read_normalized_values()
+    return [1 if v > threshold else 0 for v in norm]
 
 
-def read_sensors():
-    """Read raw values from line sensors (0–4095)."""
-    return [adc.read() for adc in adc_pins]
-
-def normalize(val, i):
-    if max_vals[i] == min_vals[i]:
-        return 0
-    return int(100 * (val - min_vals[i]) / (max_vals[i] - min_vals[i]))
-
-def get_normalized(sensor_vals):
-    return [normalize(reading, i) for i, reading in enumerate(sensor_vals)]
-
-def get_binary(normalized_vals, threshold=50):
-    return [1 if v < threshold else 0 for v in normalized_vals]
-
-def get_inverse(normalized_vals):
-    return [100 - v for v in normalized_vals]
+ ##---------------ENCODER----------------##
 
 
 
- ##--------------------------------##
+
+
+
 
