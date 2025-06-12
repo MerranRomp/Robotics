@@ -4,8 +4,6 @@ import VL53L0X
 from Utils import SeeFunctions, ThinkFunctions, ActFunctions
 import math
 
-
-
 def update(pin):
     global tick_count, last_a
     a = pin_a.value()
@@ -16,14 +14,9 @@ def update(pin):
         last_a = a
 
 
-        
 pin_a = Pin(18, Pin.IN)
 pin_b = Pin(19, Pin.IN)
 
-scl = Pin(22)  # I2C SCL pin
-sda = Pin(21)  # I2C SDA pin
-
-print("test1")
 #variables
 
 tick_count = 0
@@ -39,22 +32,17 @@ recognition_distance = 200 # Distance in mm to recognize an object
 IR_sensor_pins = [32, 33, 34, 35, 25]  # Pins for IR sensors (adjust as needed)
 
 
-
-# Set serial to UART1 using the same pins as UART0 to communicate via USB
-#uart = UART(1, 115200, tx=1, rx=3)
-print("test2")
-#Setup Sensors
 SeeFunctions.setup_ir_sensors(*IR_sensor_pins) # Pins for IR sensors (adjust as needed)
-print("test3")
 tof = SeeFunctions.setup_VL53L0X()
-print("test4")
+ActFunctions.motor_setup(26, 27)  # Setup motors on pins 26 and 27
 pin_a.irq(trigger=Pin.IRQ_RISING | Pin.IRQ_FALLING, handler=update)
-print("test5")
 
 #set varialbles and initial states
 current_state = 'forward' # Initial state of the robot
 object_detected = False # Flag to indicate if an object is detected
 state_updated = True # Flag to indicate if the state has been updated
+left_Speed = 0  # Initial speed for left motor
+right_Speed = 0  # Initial speed for right motor
 
 
 
@@ -102,11 +90,11 @@ while True:
     ############################################
 
     # Send the new state when updated
-    if state_updated == True:
-        print("test")
-        print(counter)
-        counter += 1    # increment counter
-        sleep(0.5) #wait 0.02 seconds
+    ActFunctions.motor_speed(left_Speed, right_Speed)  # Set motor speed to 50% for both motors
+    print("test")
+    print(counter)
+    counter += 1    # increment counter
+    sleep(0.02)     # wait 0.02 seconds
 
 
 
