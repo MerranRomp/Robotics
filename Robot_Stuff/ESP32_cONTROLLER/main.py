@@ -1,15 +1,31 @@
 from machine import Pin, I2C, UART
 from time import ticks_ms, ticks_diff, sleep, time, ticks_us
-from VL53L0X import VL53L0X
+import VL53L0X
 from Utils import SeeFunctions, ThinkFunctions, ActFunctions
 import math
 
+
+
+def update(pin):
+    global tick_count, last_a
+    a = pin_a.value()
+    b = pin_b.value()
+    if a != last_a:  # only on change
+        direction = 1 if a != b else -1
+        tick_count += direction
+        last_a = a
+
+
+        
 pin_a = Pin(18, Pin.IN)
 pin_b = Pin(19, Pin.IN)
 
+scl = Pin(22)  # I2C SCL pin
+sda = Pin(21)  # I2C SDA pin
 
-
+print("test1")
 #variables
+
 tick_count = 0
 last_a = 0
 counter = 0
@@ -20,30 +36,20 @@ GEAR_RATIO = 30  # gearbox reduction ratio
 WHEEL_DIAMETER_CM = 6.5
 recognition_distance = 200 # Distance in mm to recognize an object
 
+IR_sensor_pins = [32, 33, 34, 35, 25]  # Pins for IR sensors (adjust as needed)
+
 
 
 # Set serial to UART1 using the same pins as UART0 to communicate via USB
-uart = UART(1, 115200, tx=1, rx=3)
-
+#uart = UART(1, 115200, tx=1, rx=3)
+print("test2")
 #Setup Sensors
-SeeFunctions.setup_ir_sensors(32, 33, 34, 35, 25) # Pins for IR sensors (adjust as needed)
+SeeFunctions.setup_ir_sensors(*IR_sensor_pins) # Pins for IR sensors (adjust as needed)
+print("test3")
 tof = SeeFunctions.setup_VL53L0X()
-
-pin_a.irq(trigger=Pin.IRQ_RISING | Pin.IRQ_FALLING, handler=SeeFunctions.update)
-
-
-
-# Setup buttons
-button_left = Pin(34, Pin.IN, Pin.PULL_DOWN)
-button_right = Pin(35, Pin.IN, Pin.PULL_DOWN)
-
-# Wait for the button click before changing the serial port to UART1.
-# During the wait period, the program can be stopped using the STOP button.
-print("Click the button on the ESP32 to continue. Then, close Thonny and run the Webots simulation.")
-print("Or click STOP in Thonny to return to the REPL.")
-while button_left() == False:
-    sleep(0.25)
-
+print("test4")
+pin_a.irq(trigger=Pin.IRQ_RISING | Pin.IRQ_FALLING, handler=update)
+print("test5")
 
 #set varialbles and initial states
 current_state = 'forward' # Initial state of the robot
@@ -61,11 +67,16 @@ while True:
     start_time = ticks_us()
 
 
-    distance_mm = SeeFunctions.filtered_distance()
-    if distance_mm < recognition_distance:  # If the distance is less than the recognition distance
-        object_detected = True
+    #distance_mm = SeeFunctions.filtered_distance()
+    #if distance_mm < recognition_distance:  # If the distance is less than the recognition distance
+    #    object_detected = True
 
-    sensor_vals = SeeFunctions.read_IR_sensors()
+    sensor_vals = SeeFunctions.read_raw_values()
+    print("IR Sensor Values:", sensor_vals)
+    sensor_vals = SeeFunctions.read_normalized_values()
+    print("IR Norm Values:", sensor_vals)
+    sensor_vals = SeeFunctions.read_binary_values()
+    print("IR Binary Values:", sensor_vals)
 
     delta_ticks = tick_count - start_ticks
     delta_time = ticks_diff(ticks_us(), start_time) / 1_000_000  # seconds
@@ -75,6 +86,8 @@ while True:
     wheel_rps = motor_rps / GEAR_RATIO
     wheel_circ = math.pi * WHEEL_DIAMETER_CM
     speed_cm_s = wheel_rps * wheel_circ
+    print (f"Speed: {speed_cm_s:.2f} cm/s")
+
 
     ############################################
     #                 Think                    #
@@ -82,7 +95,24 @@ while True:
 
     error = ThinkFunctions.compute_error(sensor_vals, method='binary')
 
-"""
+
+    
+    ############################################
+    #                  Act                     #
+    ############################################
+
+    # Send the new state when updated
+    if state_updated == True:
+        print("test")
+        print(counter)
+        counter += 1    # increment counter
+        sleep(0.5) #wait 0.02 seconds
+
+
+
+
+
+    """
     # Implement the line-following state machine transitions
     if current_state == 'forward':
         counter = 0
@@ -125,19 +155,5 @@ while True:
             current_state = 'forward'
             state_update = True
             led_board.value(0)
-"""            
-    
-    ############################################
-    #                  Act                     #
-    ############################################
-"""
-    # Send the new state when updated
-    if state_updated == True:
-        uart.write(current_state + '\n')
-        state_updated = False
+"""           
 
-    counter += 1    # increment counter
-    sleep(0.02)     # wait 0.02 seconds
-   
-
-"""
