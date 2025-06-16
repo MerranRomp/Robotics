@@ -1,41 +1,68 @@
 from machine import Pin, I2C, UART
 from time import ticks_ms, ticks_diff, sleep, time, ticks_us
-import VL53L0X
 from Utils import SeeFunctions, ThinkFunctions, ActFunctions
 import math
 
-def update(pin):
-    global tick_count, last_a
-    a = pin_a.value()
-    b = pin_b.value()
-    if a != last_a:  # only on change
+# Encoder 1 ISR
+def update_encoder1(pin):
+    global tick_count_1, last_a_1
+    a = pin_a1.value()
+    b = pin_b1.value()
+    if a != last_a_1:
         direction = 1 if a != b else -1
-        tick_count += direction
-        last_a = a
+        tick_count_1 += direction
+        last_a_1 = a
+
+# Encoder 2 ISR
+def update_encoder2(pin):
+    global tick_count_2, last_a_2
+    a = pin_a2.value()
+    b = pin_b2.value()
+    if a != last_a_2:
+        direction = 1 if a != b else -1
+        tick_count_2 += direction
+        last_a_2 = a
+
+# Encoder 1
+tick_count_1 = 0
+last_a_1 = 0
+
+# Encoder 2
+tick_count_2 = 0
+last_a_2 = 0
 
 
-pin_a = Pin(18, Pin.IN)
-pin_b = Pin(19, Pin.IN)
+# Encoder 1 Pins
+pin_a1 = Pin(18, Pin.IN)
+pin_b1 = Pin(13, Pin.IN)
+# Encoder 2 Pins
+pin_a2 = Pin(12, Pin.IN)
+pin_b2 = Pin(5, Pin.IN)
+
 
 #variables
-
-tick_count = 0
-last_a = 0
 counter = 0
 COUNTER_MAX = 5
 COUNTER_STOP = 50
-PPR = 11  # encoder pulses per motor revolution (check your encoder datasheet)
-GEAR_RATIO = 30  # gearbox reduction ratio
+PPR = 16  # encoder pulses per motor revolution (check your encoder datasheet)
+GEAR_RATIO = 120  # gearbox reduction ratio
 WHEEL_DIAMETER_CM = 6.5
 recognition_distance = 200 # Distance in mm to recognize an object
+previous_distance = 2000
+#start position
+x = 0.0  # in cm
+y = 0.0
+theta = 0.0  # in radians
+WHEEL_BASE_CM = 15.5  # replace with your actual wheel separation
 
-IR_sensor_pins = [32, 33, 34, 35, 25]  # Pins for IR sensors (adjust as needed)
+IR_sensor_pins = [36, 34, 35, 4, 39]  # Pins for IR sensors (adjust as needed)
 
 
 SeeFunctions.setup_ir_sensors(*IR_sensor_pins) # Pins for IR sensors (adjust as needed)
-tof = SeeFunctions.setup_VL53L0X()
+SeeFunctions.setup_VL53L0X()
 ActFunctions.motor_setup(26, 27)  # Setup motors on pins 26 and 27
-pin_a.irq(trigger=Pin.IRQ_RISING | Pin.IRQ_FALLING, handler=update)
+pin_a1.irq(trigger=Pin.IRQ_RISING | Pin.IRQ_FALLING, handler=update_encoder1)
+pin_a2.irq(trigger=Pin.IRQ_RISING | Pin.IRQ_FALLING, handler=update_encoder2)
 
 #set varialbles and initial states
 current_state = 'forward' # Initial state of the robot
@@ -47,54 +74,53 @@ right_Speed = 0  # Initial speed for right motor
 
 
 while True:
-    
     ############################################
     #                  See                     #
     ############################################
-    start_ticks = tick_count
-    start_time = ticks_us()
 
 
-    #distance_mm = SeeFunctions.filtered_distance()
-    #if distance_mm < recognition_distance:  # If the distance is less than the recognition distance
-    #    object_detected = True
+    distance_mm = SeeFunctions.TOFdistance() 
+    if distance_mm < recognition_distance:
+        object_detected = True
 
-    sensor_vals = SeeFunctions.read_raw_values()
-    print("IR Sensor Values:", sensor_vals)
-    sensor_vals = SeeFunctions.read_normalized_values()
-    print("IR Norm Values:", sensor_vals)
     sensor_vals = SeeFunctions.read_binary_values()
     print("IR Binary Values:", sensor_vals)
 
-    delta_ticks = tick_count - start_ticks
-    delta_time = ticks_diff(ticks_us(), start_time) / 1_000_000  # seconds
-
     # Compute wheel speed
-    motor_rps = delta_ticks / PPR / delta_time
-    wheel_rps = motor_rps / GEAR_RATIO
-    wheel_circ = math.pi * WHEEL_DIAMETER_CM
-    speed_cm_s = wheel_rps * wheel_circ
-    print (f"Speed: {speed_cm_s:.2f} cm/s")
-
-
+    delta_ticks_left = tick_count_1
+    delta_ticks_right = tick_count_2
+    tick_count_1 = 0
+    tick_count_2 = 0
+    left_distance_cm = (delta_ticks_left / PPR / GEAR_RATIO) * math.pi * WHEEL_DIAMETER_CM
+    right_distance_cm = (delta_ticks_right / PPR / GEAR_RATIO) * math.pi * WHEEL_DIAMETER_CM
     ############################################
     #                 Think                    #
     ############################################
-
-    error = ThinkFunctions.compute_error(sensor_vals, method='binary')
+    
+    #localization:
+    delta_d = (right_distance_cm + left_distance_cm) / 2.0
+    delta_theta = (right_distance_cm - left_distance_cm) / WHEEL_BASE_CM
+    
+    # Midpoint angle assumption for small time step
+    theta += delta_theta
+    x += delta_d * math.cos(theta)
+    y += delta_d * math.sin(theta)
+    
+    #error = ThinkFunctions.compute_error(sensor_vals, method='binary')
 
 
     
     ############################################
     #                  Act                     #
     ############################################
-
+    
+    print(f"Pose: x={x:.2f} cm, y={y:.2f} cm, θ={math.degrees(theta):.2f}°")
+    print(f"distance: {distance_mm:.2f}")
     # Send the new state when updated
     ActFunctions.motor_speed(left_Speed, right_Speed)  # Set motor speed to 50% for both motors
-    print("test")
     print(counter)
     counter += 1    # increment counter
-    sleep(0.02)     # wait 0.02 seconds
+    sleep(0.1)     # wait 0.02 seconds
 
 
 
@@ -144,4 +170,6 @@ while True:
             state_update = True
             led_board.value(0)
 """           
+
+
 

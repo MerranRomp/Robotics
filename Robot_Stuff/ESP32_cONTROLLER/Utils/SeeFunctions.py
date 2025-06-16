@@ -1,33 +1,35 @@
 from machine import Pin, I2C, ADC
 from time import sleep
+from VL53L0X import VL53L0X
 
 IRsensors = []
 min_vals = [294, 239, 33, 39, 0]
-max_vals = [1023, 1023, 785, 938, 1023]
+max_vals = [1023, 1023, 1023, 1023, 1023]
 threshold = 50
 
 
-
+tof = None
+_previous_distance = 2000
 
  ##----------------TOF SENSOR----------------##
-from VL53L0X import VL53L0X  # Import the VL53L0X library for the Time-of-Flight sensor
+#from VL53L0X import VL53L0X  # Import the VL53L0X library for the Time-of-Flight sensor
 
 def setup_VL53L0X(): # Function to setup the VL53L0X Time-of-Flight sensor
+    global tof
     i2c = I2C(0, scl=Pin(22), sda=Pin(21))  # adjust pins as needed
     tof = VL53L0X(i2c)
     tof.start()
-    return tof
+    return
 
 
-def TOF_read_distance():
-    return tof.read() # Read distance from the TOF sensor in mm
-
-def filtered_distance(tof, previous, alpha=0.3):# Function to filter the distance reading from the TOF sensor
-    new = TOF_read_distance(tof)
-    return alpha * new + (1 - alpha) * previous
-
-
-
+def TOFdistance(alpha=0.3):
+    global _previous_distance, tof
+    if tof is None:
+        raise RuntimeError("TOF sensor not initialized. Call setup_VL53L0X() first.")
+    
+    new_distance = tof.read()  # or `tof.read_range_continuous_millimeters()` if using a different library
+    _previous_distance = alpha * new_distance + (1 - alpha) * _previous_distance
+    return _previous_distance
 
  ##----------------IR GROUND SENSOR----------------##
 
@@ -61,6 +63,7 @@ def read_binary_values():
 
 
  ##---------------ENCODER----------------##
+
 
 
 
