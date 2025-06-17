@@ -3,8 +3,8 @@
 graph = {
     'A1': {'pos': (-5, 4), 'neighbors': {'B1': 1}},
     'A2': {'pos': (-4, 4), 'neighbors': {'B2': 1}},
-    'A3': {'pos': (-3, 4), 'neighbors': {'B': 1}},
-    'A4': {'pos': (-2, 4), 'neighbors': {'B': 1}},
+    'A3': {'pos': (-3, 4), 'neighbors': {'B3': 1}},
+    'A4': {'pos': (-2, 4), 'neighbors': {'B4': 1}},
 
     'B1': {'pos': (-5, 3), 'neighbors': {'A1': 1, 'B2': 1, 'D1': 2}},
     'B2': {'pos': (-4, 3), 'neighbors': {'A2': 1, 'B1': 1, 'B3': 1,}},

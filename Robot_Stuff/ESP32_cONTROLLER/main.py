@@ -2,6 +2,7 @@ from machine import Pin
 from time import sleep
 from Utils import SeeFunctions, ThinkFunctions, ActFunctions
 import math
+import nodes
 
 # ------------------------- Encoder Setup ------------------------- #
 tick_count_1 = 0
@@ -58,6 +59,12 @@ object_detected = False
 state_updated = True
 left_Speed = 0
 right_Speed = 0
+
+start = 'A'
+goal = 'F'
+path, cost = ThinkFunctions.dijkstra(start, goal)
+print("Path:", path)
+print("Total cost:", cost)
 
 # --------------------------- Initialization --------------------------- #
 SeeFunctions.setup_ir_sensors(*IR_sensor_pins)
