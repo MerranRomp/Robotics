@@ -147,7 +147,6 @@ while True:
         if not path:
             print("No path left.")
             state = 'IDLE'
-            return
 
         prev_node = current_node
         current_node = path.pop(0)
@@ -155,7 +154,6 @@ while True:
         if not path:
             print("Reached goal node:", current_node)
             state = 'IDLE'
-            return
 
         next_node = path[0]
         turn = ThinkFunctions.get_turn_direction(prev_node, current_node, next_node)
