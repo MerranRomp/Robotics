@@ -26,7 +26,8 @@ def compute_error(norm_or_bin_vals, method='inverse'):
 
 # ##----------------PATHFINDING----------------##
 
-def dijkstra(graph, start, goal):
+def dijkstra(start, goal):
+    from nodes import graph  # uses the shared graph
     queue = [(0, start, [])]
     visited = set()
 
@@ -43,7 +44,7 @@ def dijkstra(graph, start, goal):
         for neighbor, weight in graph[node]['neighbors'].items():
             if neighbor not in visited:
                 heapq.heappush(queue, (cost + weight, neighbor, path))
-    
+
     return None, float('inf')
 
 ## ##----------------TURN DETECTION----------------##

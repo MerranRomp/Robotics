@@ -1,8 +1,51 @@
 from machine import Pin, I2C
 from time import sleep, ticks_ms, ticks_diff
-from Utils import SeeFunctions, ThinkFunctions, ActFunctions
+from Utils import SeeFunctions, ActFunctions
 import math
 import nodes
+import network
+import socket
+import time
+
+from Utils import ThinkFunctions
+print("Loaded from:", ThinkFunctions.__file__)
+print("Contents:", dir(ThinkFunctions))
+
+# ------------------------- WiFi Setup ------------------------- #
+ssid = 'RobotNet'
+# Disable AP mode to avoid conflicts
+ap = network.WLAN(network.AP_IF)
+ap.active(False)
+
+# Reset and activate STA mode
+sta = network.WLAN(network.STA_IF)
+sta.active(False)
+time.sleep(1)
+sta.active(True)
+time.sleep(1)
+
+# Optional: Assign static IP to avoid DHCP issues
+sta.ifconfig(('192.168.4.20', '255.255.255.0', '192.168.4.1', '192.168.4.1'))
+
+# Connect to open AP (no password)
+print("Connecting to RobotNet...")
+sta.connect(ssid)
+
+# Wait for connection (10 seconds max)
+timeout = 10
+while not sta.isconnected() and timeout > 0:
+    print("Waiting for connection...")
+    time.sleep(1)
+    timeout -= 1
+
+if not sta.isconnected():
+    print("Failed to connect to RobotNet")
+else:
+    print("Connected:", sta.ifconfig())
+
+    # Setup UDP
+    udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
 
 # ------------------------- Encoder Setup ------------------------- #
 tick_count_1 = 0
@@ -50,12 +93,12 @@ recognition_distance = 200  # mm
 
 x, y, theta = 0.0, 0.0, 0.0  # Initial position (cm, radians)
 
-IR_sensor_pins = [36, 34, 35, 4, 39]
+IR_sensor_pins = [36, 34, 35, 32, 39]
 counter = 0
 COUNTER_MAX = 5
 COUNTER_STOP = 50
 
-current_state = 'forward'
+current_state = 'Line_following'
 object_detected = False
 state_updated = True
 left_Speed = 0
@@ -67,9 +110,9 @@ state_entry_time = ticks_ms()
 #statemachine variables
 pickup_nodes = ['A1', 'A2', 'A3', 'A4']
 dropoff_nodes = ['G6', 'G7', 'G8', 'G9']
-start = 'F1'
-goal = 'D5'
-state = 'IDLE'
+start = 'A1'
+goal = 'F9'
+state = 'Line_following'
 path = []
 current_task = 0
 last_node = None
@@ -93,6 +136,7 @@ while True:
     # ----------------------------- See ----------------------------- #
     distance_mm = SeeFunctions.TOFdistance() 
     sensor_vals = SeeFunctions.read_binary_values()
+    print(sensor_vals)
     # Encoder feedback
     delta_ticks_left = tick_count_1
     delta_ticks_right = tick_count_2
@@ -109,6 +153,7 @@ while True:
     x += delta_d * math.cos(theta)
     y += delta_d * math.sin(theta)
     error = ThinkFunctions.compute_error(sensor_vals, method='binary')
+    print(error)
 
     # ---------------------------- Think ---------------------------- #
 
@@ -185,10 +230,13 @@ while True:
             state_entry_time = ticks_ms()
         
 
-         
-    # ----------------------------- Act ----------------------------- #
+    ActFunctions.motor_speed(left_Speed, right_Speed)     
+    #msg = f"distance: {distance_mm:.2f} x: {x:.2f} y: {y:.2f} theta: {theta:.2f}"
+    #udp.sendto(msg.encode(), ('192.168.4.1', 1234))  # Send to receiver AP
+    #print("Sent:", msg)
     print(f"Pose: x={x:.2f} cm, y={y:.2f} cm, θ={math.degrees(theta):.2f}°")
     print(f"distance: {distance_mm:.2f}")
+    print(state)
     ActFunctions.motor_speed(left_Speed, right_Speed)
     print(counter)
     counter += 1
