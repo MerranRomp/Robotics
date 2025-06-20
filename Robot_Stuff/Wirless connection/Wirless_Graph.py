@@ -76,7 +76,7 @@ def draw_graph():
         for neighbor in data['neighbors']:
             if neighbor in graph:
                 nx, ny = graph[neighbor]['pos']
-                ax.plot([x, nx], [y, ny], color='blue', linewidth=2, zorder=1)
+                ax.plot([x, nx], [y, ny], color='black', linewidth=1.5, zorder=1)
 
     # Draw robot position
     if robot_node and robot_node in graph:
