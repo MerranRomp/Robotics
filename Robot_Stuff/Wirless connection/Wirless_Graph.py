@@ -54,9 +54,10 @@ def serial_reader():
                     robot_node = line
                     print(f"Received node: {robot_node}")
                 else:
-                    print(f"Ignored unknown node: {line}")
+                    print(f"No node other data: {line}")
     except Exception as e:
         print("Serial error:", e)
+        
 
 # Start serial reader in the background
 threading.Thread(target=serial_reader, daemon=True).start()
