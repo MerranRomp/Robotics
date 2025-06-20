@@ -1,7 +1,8 @@
 from machine import Pin
-from time import sleep
+from time import sleep, ticks_ms, ticks_diff
 from Utils import SeeFunctions, ThinkFunctions, ActFunctions
 import math
+from Utils import nodes
 
 # ------------------------- Encoder Setup ------------------------- #
 tick_count_1 = 0
@@ -58,6 +59,27 @@ object_detected = False
 state_updated = True
 left_Speed = 0
 right_Speed = 0
+base_speed = 50  # Base speed in %
+returning_to_node = False
+state_entry_time = ticks_ms()
+
+#statemachine variables
+pickup_nodes = ['A1', 'A2', 'A3', 'A4']
+dropoff_nodes = ['G6', 'G7', 'G8', 'G9']
+start = 'F1'
+state = 'IDLE'
+path = []
+current_task = 0
+last_node = None
+
+path, cost = ThinkFunctions.dijkstra(start, goal)
+print("Path:", path)
+print("Total cost:", cost)
+
+
+
+#robot starts at the first node
+current_node = 'F1'
 
 # --------------------------- Initialization --------------------------- #
 SeeFunctions.setup_ir_sensors(*IR_sensor_pins)
@@ -68,31 +90,100 @@ ActFunctions.motor_setup(26, 27)
 while True:
     # ----------------------------- See ----------------------------- #
     distance_mm = SeeFunctions.TOFdistance() 
-    if distance_mm < recognition_distance:
-        object_detected = True
-
     sensor_vals = SeeFunctions.read_binary_values()
-    print("IR Binary Values:", sensor_vals)
-
     # Encoder feedback
     delta_ticks_left = tick_count_1
     delta_ticks_right = tick_count_2
     tick_count_1 = 0
     tick_count_2 = 0
-
+    # calculate speed based on encoder ticks
     left_distance_cm = (delta_ticks_left / PPR / GEAR_RATIO) * math.pi * WHEEL_DIAMETER_CM
     right_distance_cm = (delta_ticks_right / PPR / GEAR_RATIO) * math.pi * WHEEL_DIAMETER_CM
-
-    # ---------------------------- Think ---------------------------- #
+    # calculate speed in cm/s
     delta_d = (right_distance_cm + left_distance_cm) / 2.0
     delta_theta = (right_distance_cm - left_distance_cm) / WHEEL_BASE_CM
-
+    # displacement in cm
     theta += delta_theta
     x += delta_d * math.cos(theta)
     y += delta_d * math.sin(theta)
+    error = ThinkFunctions.compute_error(sensor_vals, method='binary')
 
-    # error = ThinkFunctions.compute_error(sensor_vals, method='binary')
+    # ---------------------------- Think ---------------------------- #
 
+    if state == 'IDLE':
+        if current_task < len(pickup_nodes):
+            state = 'PLAN_PATH'
+
+    elif state == 'Line_following':
+        print("Following line...")
+        # 1. Object Detection
+        if distance_mm <= recognition_distance:  # Check if distance is below threshold
+            state = 'AVOID_OBSTACLE'
+
+        # 2. Line Following PID Control
+        correction = ThinkFunctions.pid_update(error, Kp=1.0, Ki=0.0, Kd=0.1)
+        left_speed = base_speed - correction
+        right_speed = base_speed + correction
+
+        # 3. Node Detection
+        num_active = sum(sensor_vals)
+        if num_active >= 3:  # Three or more sensors active => cross section
+            state = 'AT_NODE'  # Transition to whatever handles node logic
+
+    elif state == 'AVOID_OBSTACLE':
+        state_entry_time = ticks_ms()
+        if ticks_diff(ticks_ms(), state_entry_time) < 1200:
+            # During turn phase (1.2s)
+            left_Speed = -base_speed
+            right_Speed = base_speed
+        else:
+            left_Speed = 0
+            right_Speed = 0
+            returning_to_node = True
+            state = 'Line_following'
+            state_entry_time = ticks_ms()
+
+    elif state == 'AT_NODE':
+        if not path:
+            print("No path left.")
+            state = 'IDLE'
+
+        prev_node = current_node
+        current_node = path.pop(0)
+
+        if not path:
+            print("Reached goal node:", current_node)
+            state = 'IDLE'
+
+        next_node = path[0]
+        turn = ThinkFunctions.get_turn_direction(prev_node, current_node, next_node)
+
+        print(f"From {prev_node} to {current_node} → {next_node}, turn: {turn}")
+        state = turn  # 'turn_left', 'turn_right', or 'go_straight'
+        state_entry_time = ticks_ms()  # for timing motor action
+
+    elif state == 'turn_left':
+        if ticks_diff(ticks_ms(), state_entry_time) < 700:  # adjust timing for your robot
+            left_Speed = -base_speed
+            right_Speed = base_speed
+        else:
+            left_Speed = 0
+            right_Speed = 0
+            state = 'Line_following'
+            state_entry_time = ticks_ms()
+
+    elif state == 'turn_right':
+        if ticks_diff(ticks_ms(), state_entry_time) < 700:
+            left_Speed = base_speed
+            right_Speed = -base_speed
+        else:
+            left_Speed = 0
+            right_Speed = 0
+            state = 'Line_following'
+            state_entry_time = ticks_ms()
+        
+
+         
     # ----------------------------- Act ----------------------------- #
     print(f"Pose: x={x:.2f} cm, y={y:.2f} cm, θ={math.degrees(theta):.2f}°")
     print(f"distance: {distance_mm:.2f}")
@@ -100,49 +191,3 @@ while True:
     print(counter)
     counter += 1
     sleep(0.1)
-
-    # ------------------- State Machine Placeholder ------------------ #
-    """
-    # Implement the line-following state machine transitions
-    if current_state == 'forward':
-        counter = 0
-        if line_right and not line_left:
-            current_state = 'turn_right'
-            state_updated = True
-        elif line_left and not line_right:
-            current_state = 'turn_left'
-            state_updated = True
-        elif line_left and line_right and line_center:  # lost the line
-            current_state = 'turn_left'
-            state_updated = True
-        elif line_left and line_center and not line_right:
-            current_state = 'forward'
-            state_updated = True
-        elif button_right.value() == True:
-            current_state = 'stop'
-            state_updated = True
-
-    if current_state == 'turn_right':
-        if counter >= COUNTER_MAX:
-            current_state = 'forward'
-            state_updated = True
-        elif button_right.value() == True:
-            current_state = 'stop'
-            state_updated = True
-
-    if current_state == 'turn_left':
-        if counter >= COUNTER_MAX:
-            current_state = 'forward'
-            state_updated = True
-        elif button_right.value() == True:
-            current_state = 'stop'
-            state_updated = True
-
-    if current_state == 'stop':
-        led_board.value(1)
-        if counter >= COUNTER_STOP:
-            current_state = 'forward'
-            state_update = True
-            led_board.value(0)
-    """
-
