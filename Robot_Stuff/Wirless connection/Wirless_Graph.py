@@ -4,7 +4,7 @@ import threading
 import time
 
 # Replace with your correct serial port and baud rate
-SERIAL_PORT = 'COM3'  # e.g. '/dev/ttyUSB0' on Linux
+SERIAL_PORT = 'COM5'  # e.g. '/dev/ttyUSB0' on Linux
 BAUD_RATE = 115200
 
 # Graph data (same as yours)
