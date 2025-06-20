@@ -30,9 +30,9 @@ while not sta.isconnected() and timeout > 0:
     timeout -= 1
 
 if not sta.isconnected():
-    print("❌ Failed to connect to RobotNet")
+    print("Failed to connect to RobotNet")
 else:
-    print("✅ Connected:", sta.ifconfig())
+    print("Connected:", sta.ifconfig())
 
     # Setup UDP
     udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

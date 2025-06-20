@@ -4,7 +4,7 @@ import socket
 # Start WiFi Access Point
 ap = network.WLAN(network.AP_IF)
 ap.active(True)
-ap.config(essid='RobotNet', password='12345678')
+ap.config(essid='RobotNet', password='12345678', authmode=network.AUTH_WPA_WPA2_PSK)
 
 # Setup UDP socket
 udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
