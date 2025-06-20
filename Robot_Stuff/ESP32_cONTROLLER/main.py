@@ -1,14 +1,16 @@
-from machine import Pin
+from machine import Pin, I2C
 from time import sleep, ticks_ms, ticks_diff
 from Utils import SeeFunctions, ThinkFunctions, ActFunctions
 import math
-from Utils import nodes
+import nodes
 
 # ------------------------- Encoder Setup ------------------------- #
 tick_count_1 = 0
 last_a_1 = 0
 tick_count_2 = 0
 last_a_2 = 0
+
+i2c = I2C(0, scl=Pin(22), sda=Pin(21))  # adjust pins as needed
 
 # Encoder 1 ISR
 def update_encoder1(pin):
@@ -36,8 +38,7 @@ pin_b1 = Pin(13, Pin.IN)
 pin_a2 = Pin(12, Pin.IN)
 pin_b2 = Pin(5, Pin.IN)
 
-# Attach encoder interrupts
-pin_a1.irq(trigger=Pin.IRQ_RISING | Pin.IRQ_FALLING, handler=update_encoder1)
+# Attach encoder interruptspin_a1.irq(trigger=Pin.IRQ_RISING | Pin.IRQ_FALLING, handler=update_encoder1)
 pin_a2.irq(trigger=Pin.IRQ_RISING | Pin.IRQ_FALLING, handler=update_encoder2)
 
 # ---------------------- Constants and Variables ---------------------- #
@@ -67,6 +68,7 @@ state_entry_time = ticks_ms()
 pickup_nodes = ['A1', 'A2', 'A3', 'A4']
 dropoff_nodes = ['G6', 'G7', 'G8', 'G9']
 start = 'F1'
+goal = 'D5'
 state = 'IDLE'
 path = []
 current_task = 0
@@ -83,7 +85,7 @@ current_node = 'F1'
 
 # --------------------------- Initialization --------------------------- #
 SeeFunctions.setup_ir_sensors(*IR_sensor_pins)
-SeeFunctions.setup_VL53L0X()
+SeeFunctions.setup_VL53L0X(i2c)
 ActFunctions.motor_setup(26, 27)
 
 # ----------------------------- Main Loop ----------------------------- #
