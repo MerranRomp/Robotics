@@ -4,7 +4,7 @@ import threading
 import time
 
 # Replace with your correct serial port and baud rate
-SERIAL_PORT = 'COM3'  # e.g. '/dev/ttyUSB0' on Linux
+SERIAL_PORT = 'COM5'  # e.g. '/dev/ttyUSB0' on Linux
 BAUD_RATE = 115200
 
 # Graph data (same as yours)
@@ -54,9 +54,10 @@ def serial_reader():
                     robot_node = line
                     print(f"Received node: {robot_node}")
                 else:
-                    print(f"Ignored unknown node: {line}")
+                    print(f"No node other data: {line}")
     except Exception as e:
         print("Serial error:", e)
+        
 
 # Start serial reader in the background
 threading.Thread(target=serial_reader, daemon=True).start()
