@@ -1,59 +1,17 @@
-from machine import Pin, I2C
+from machine import Pin, I2C, PWM
 from time import sleep, ticks_ms, ticks_diff
-from Utils import SeeFunctions, ActFunctions
+from Utils import SeeFunctions, ThinkFunctions, ActFunctions
 import math
 import nodes
-import network
-import socket
-import time
 
-from Utils import ThinkFunctions
-print("Loaded from:", ThinkFunctions.__file__)
-print("Contents:", dir(ThinkFunctions))
-
-# ------------------------- WiFi Setup ------------------------- #
-ssid = 'RobotNet'
-# Disable AP mode to avoid conflicts
-ap = network.WLAN(network.AP_IF)
-ap.active(False)
-
-# Reset and activate STA mode
-sta = network.WLAN(network.STA_IF)
-sta.active(False)
-time.sleep(1)
-sta.active(True)
-time.sleep(1)
-
-# Optional: Assign static IP to avoid DHCP issues
-sta.ifconfig(('192.168.4.20', '255.255.255.0', '192.168.4.1', '192.168.4.1'))
-
-# Connect to open AP (no password)
-print("Connecting to RobotNet...")
-sta.connect(ssid)
-
-# Wait for connection (10 seconds max)
-timeout = 10
-while not sta.isconnected() and timeout > 0:
-    print("Waiting for connection...")
-    time.sleep(1)
-    timeout -= 1
-
-if not sta.isconnected():
-    print("Failed to connect to RobotNet")
-else:
-    print("Connected:", sta.ifconfig())
-
-    # Setup UDP
-    udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
-
+sleep(1)
 # ------------------------- Encoder Setup ------------------------- #
 tick_count_1 = 0
 last_a_1 = 0
 tick_count_2 = 0
 last_a_2 = 0
-
 i2c = I2C(0, scl=Pin(22), sda=Pin(21))  # adjust pins as needed
+print(i2c.scan())
 
 # Encoder 1 ISR
 def update_encoder1(pin):
@@ -74,6 +32,28 @@ def update_encoder2(pin):
         direction = 1 if a != b else -1
         tick_count_2 += direction
         last_a_2 = a
+
+
+class Motor:
+    def __init__(self, pin_fwd, pin_rev, freq=1000):
+        self.pwm_fwd = PWM(Pin(pin_fwd), freq=freq)
+        self.pwm_rev = PWM(Pin(pin_rev), freq=freq)
+
+    def set_speed(self, speed):
+        speed = max(min(speed, 1.0), -1.0)
+        if speed >= 0:
+            self.pwm_fwd.duty(int(speed * 1023))
+            self.pwm_rev.duty(0)
+        else:
+            self.pwm_fwd.duty(0)
+            self.pwm_rev.duty(int(-speed * 1023))
+
+    def stop(self):
+        self.pwm_fwd.duty(0)
+        self.pwm_rev.duty(0)
+
+motorA = Motor(27, 14)
+motorB = Motor(16, 17)
 
 # Encoder Pins
 pin_a1 = Pin(18, Pin.IN)
@@ -98,7 +78,7 @@ counter = 0
 COUNTER_MAX = 5
 COUNTER_STOP = 50
 
-current_state = 'Line_following'
+current_state = 'forward'
 object_detected = False
 state_updated = True
 left_Speed = 0
@@ -110,9 +90,9 @@ state_entry_time = ticks_ms()
 #statemachine variables
 pickup_nodes = ['A1', 'A2', 'A3', 'A4']
 dropoff_nodes = ['G6', 'G7', 'G8', 'G9']
-start = 'A1'
-goal = 'F9'
-state = 'Line_following'
+start = 'F1'
+goal = 'D5'
+state = 'IDLE'
 path = []
 current_task = 0
 last_node = None
@@ -129,14 +109,12 @@ current_node = 'F1'
 # --------------------------- Initialization --------------------------- #
 SeeFunctions.setup_ir_sensors(*IR_sensor_pins)
 SeeFunctions.setup_VL53L0X(i2c)
-ActFunctions.motor_setup(26, 27)
 
 # ----------------------------- Main Loop ----------------------------- #
 while True:
     # ----------------------------- See ----------------------------- #
     distance_mm = SeeFunctions.TOFdistance() 
     sensor_vals = SeeFunctions.read_binary_values()
-    print(sensor_vals)
     # Encoder feedback
     delta_ticks_left = tick_count_1
     delta_ticks_right = tick_count_2
@@ -153,13 +131,14 @@ while True:
     x += delta_d * math.cos(theta)
     y += delta_d * math.sin(theta)
     error = ThinkFunctions.compute_error(sensor_vals, method='binary')
-    print(error)
 
     # ---------------------------- Think ---------------------------- #
 
     if state == 'IDLE':
-        if current_task < len(pickup_nodes):
-            state = 'PLAN_PATH'
+        left_Speed = 0
+        right_Speed = 0
+        #if current_task < len(pickup_nodes):
+        #    state = 'PLAN_PATH'
 
     elif state == 'Line_following':
         print("Following line...")
@@ -170,6 +149,7 @@ while True:
         # 2. Line Following PID Control
         correction = ThinkFunctions.pid_update(error, Kp=1.0, Ki=0.0, Kd=0.1)
         left_speed = base_speed - correction
+        
         right_speed = base_speed + correction
 
         # 3. Node Detection
@@ -230,14 +210,14 @@ while True:
             state_entry_time = ticks_ms()
         
 
-    ActFunctions.motor_speed(left_Speed, right_Speed)     
-    #msg = f"distance: {distance_mm:.2f} x: {x:.2f} y: {y:.2f} theta: {theta:.2f}"
-    #udp.sendto(msg.encode(), ('192.168.4.1', 1234))  # Send to receiver AP
-    #print("Sent:", msg)
+         
+    # ----------------------------- Act ----------------------------- #
     print(f"Pose: x={x:.2f} cm, y={y:.2f} cm, θ={math.degrees(theta):.2f}°")
     print(f"distance: {distance_mm:.2f}")
-    print(state)
-    ActFunctions.motor_speed(left_Speed, right_Speed)
+    motorA.set_speed(left_Speed)
+    motorB.set_speed(right_Speed)
+
+    print(sensor_vals)
     print(counter)
     counter += 1
     sleep(0.1)
