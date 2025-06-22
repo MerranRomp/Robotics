@@ -3,12 +3,6 @@ from time import sleep
 from VL53L0X import VL53L0X
 import math
 
-IRsensors = []
-min_vals = [294, 239, 33, 39, 0]
-max_vals = [1023, 1023, 1023, 1023, 1023]
-threshold = 50
-
-
 tof = None
 _previous_distance = 2000
 
@@ -33,9 +27,18 @@ def TOFdistance(alpha=0.3):
 
  ##----------------IR GROUND SENSOR----------------##
 
+# Globals
+IRsensors = []  # ADC sensor objects
+prev_inputs = [200] * 5
+prev_outputs = [200] * 5
+min_vals = [294, 239, 33, 39, 0]
+max_vals = [1023, 1023, 1023, 1023, 1023]
+threshold = 50        # Set based on testing
 
+# Filter coefficients
+alpha_lowpass = 0.5
+alpha_highpass = 0.9
 
-sensors = []  # Global list to hold ADC sensor objects
 def setup_ir_sensors(*pins):
     global IRsensors
     IRsensors = []
@@ -48,10 +51,24 @@ def setup_ir_sensors(*pins):
 def read_raw_values():
     return [sensor.read() for sensor in IRsensors]
 
+def apply_lowpass_filter(raw_values):
+    global prev_outputs
+    print("Raw:     ", raw_values)
+    if prev_outputs == [0] * 5:
+        prev_outputs = raw_values[:]  # warm start
+
+    filtered = []
+    for i in range(5):
+        filtered_val = alpha_lowpass * raw_values[i] + (1 - alpha_lowpass) * prev_outputs[i]
+        prev_outputs[i] = filtered_val
+        filtered.append(int(filtered_val))
+    print("Filtered: ", filtered)
+    return filtered
+
 def read_normalized_values():
-    raw = read_raw_values()
+    filtered = apply_lowpass_filter(read_raw_values())
     normalized = []
-    for val, min_v, max_v in zip(raw, min_vals, max_vals):
+    for val, min_v, max_v in zip(filtered, min_vals, max_vals):
         norm = (val - min_v) / (max_v - min_v) * 100
         norm = max(0, min(100, int(norm)))  # Clamp between 0–100
         normalized.append(norm)
@@ -59,4 +76,6 @@ def read_normalized_values():
 
 def read_binary_values():
     norm = read_normalized_values()
+    print("Norm:     ", norm)
     return [1 if v > threshold else 0 for v in norm]
+
