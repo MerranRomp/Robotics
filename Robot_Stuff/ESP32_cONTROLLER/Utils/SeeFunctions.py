@@ -21,7 +21,7 @@ def TOFdistance(alpha=0.3):
     if tof is None:
         raise RuntimeError("TOF sensor not initialized. Call setup_VL53L0X() first.")
     
-    new_distance = tof.read()  # or `tof.read_range_continuous_millimeters()` if using a different library
+    new_distance = (tof.read() - 80) # or `tof.read_range_continuous_millimeters()` if using a different library
     _previous_distance = alpha * new_distance + (1 - alpha) * _previous_distance
     return _previous_distance
 
@@ -32,7 +32,7 @@ IRsensors = []  # ADC sensor objects
 prev_inputs = [200] * 5
 prev_outputs = [200] * 5
 min_vals = [294, 239, 33, 39, 0]
-max_vals = [1023, 1023, 1023, 1023, 1023]
+max_vals = [1023, 1023, 785, 938, 1023]
 threshold = 50        # Set based on testing
 
 # Filter coefficients
@@ -53,7 +53,6 @@ def read_raw_values():
 
 def apply_lowpass_filter(raw_values):
     global prev_outputs
-    print("Raw:     ", raw_values)
     if prev_outputs == [0] * 5:
         prev_outputs = raw_values[:]  # warm start
 
@@ -62,7 +61,6 @@ def apply_lowpass_filter(raw_values):
         filtered_val = alpha_lowpass * raw_values[i] + (1 - alpha_lowpass) * prev_outputs[i]
         prev_outputs[i] = filtered_val
         filtered.append(int(filtered_val))
-    print("Filtered: ", filtered)
     return filtered
 
 def read_normalized_values():
@@ -78,4 +76,3 @@ def read_binary_values():
     norm = read_normalized_values()
     print("Norm:     ", norm)
     return [1 if v > threshold else 0 for v in norm]
-

@@ -11,9 +11,10 @@ last_a_1 = 0
 tick_count_2 = 0
 last_a_2 = 0
 i2c = I2C(0, scl=Pin(22), sda=Pin(21))  # adjust pins as needed
-print(i2c.scan())
+
 
 # Encoder 1 ISR
+print("Init encoder 1")
 def update_encoder1(pin):
     global tick_count_1, last_a_1
     a = pin_a1.value()
@@ -24,6 +25,7 @@ def update_encoder1(pin):
         last_a_1 = a
 
 # Encoder 2 ISR
+print("Init encoder 2")
 def update_encoder2(pin):
     global tick_count_2, last_a_2
     a = pin_a2.value()
@@ -33,27 +35,34 @@ def update_encoder2(pin):
         tick_count_2 += direction
         last_a_2 = a
 
-
 class Motor:
     def __init__(self, pin_fwd, pin_rev, freq=1000):
-        self.pwm_fwd = PWM(Pin(pin_fwd), freq=freq)
-        self.pwm_rev = PWM(Pin(pin_rev), freq=freq)
+        self.pwm_fwd = PWM(Pin(pin_fwd))
+        self.pwm_fwd.freq(freq)
+        self.pwm_rev = PWM(Pin(pin_rev))
+        self.pwm_rev.freq(freq)
 
-    def set_speed(self, speed):
-        speed = max(min(speed, 1.0), -1.0)
-        if speed >= 0:
-            self.pwm_fwd.duty(int(speed * 1023))
-            self.pwm_rev.duty(0)
+    def set_speed(self, speed_percent):
+        # Clamp to -100..100
+        speed_percent = max(min(speed_percent, 100), -100)
+
+        # Convert to 16-bit duty cycle (0..65535)
+        duty = int(abs(speed_percent) / 100 * 65535)
+
+        if speed_percent >= 0:
+            self.pwm_fwd.duty_u16(duty)
+            self.pwm_rev.duty_u16(0)
         else:
-            self.pwm_fwd.duty(0)
-            self.pwm_rev.duty(int(-speed * 1023))
+            self.pwm_fwd.duty_u16(0)
+            self.pwm_rev.duty_u16(duty)
 
     def stop(self):
-        self.pwm_fwd.duty(0)
-        self.pwm_rev.duty(0)
+        self.pwm_fwd.duty_u16(0)
+        self.pwm_rev.duty_u16(0)
 
-motorA = Motor(27, 14)
-motorB = Motor(16, 17)
+motorA = Motor(pin_fwd=27, pin_rev=14)
+motorB = Motor(pin_fwd=25, pin_rev=26)
+
 
 # Encoder Pins
 pin_a1 = Pin(18, Pin.IN)
@@ -78,9 +87,7 @@ counter = 0
 COUNTER_MAX = 5
 COUNTER_STOP = 50
 
-current_state = 'forward'
 object_detected = False
-state_updated = True
 left_Speed = 0
 right_Speed = 0
 base_speed = 50  # Base speed in %
@@ -107,6 +114,7 @@ print("Total cost:", cost)
 current_node = 'F1'
 
 # --------------------------- Initialization --------------------------- #
+print("Init sensors")
 SeeFunctions.setup_ir_sensors(*IR_sensor_pins)
 SeeFunctions.setup_VL53L0X(i2c)
 
@@ -135,10 +143,10 @@ while True:
     # ---------------------------- Think ---------------------------- #
 
     if state == 'IDLE':
-        left_Speed = 0
-        right_Speed = 0
-        #if current_task < len(pickup_nodes):
-        #    state = 'PLAN_PATH'
+        left_Speed = base_speed
+        right_Speed = base_speed
+        if current_task < len(pickup_nodes):
+            state = 'IDLE'
 
     elif state == 'Line_following':
         print("Following line...")
@@ -212,6 +220,7 @@ while True:
 
          
     # ----------------------------- Act ----------------------------- #
+    print(f"state: {state}")
     print(f"Pose: x={x:.2f} cm, y={y:.2f} cm, θ={math.degrees(theta):.2f}°")
     print(f"distance: {distance_mm:.2f}")
     motorA.set_speed(left_Speed)
