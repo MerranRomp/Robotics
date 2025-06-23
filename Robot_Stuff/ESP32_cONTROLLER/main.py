@@ -71,8 +71,8 @@ pin_a2 = Pin(12, Pin.IN)
 pin_b2 = Pin(5, Pin.IN)
 
 # Attach encoder interruptspin_a1.irq(trigger=Pin.IRQ_RISING | Pin.IRQ_FALLING, handler=update_encoder1)
+pin_a1.irq(trigger=Pin.IRQ_RISING | Pin.IRQ_FALLING, handler=update_encoder1)
 pin_a2.irq(trigger=Pin.IRQ_RISING | Pin.IRQ_FALLING, handler=update_encoder2)
-
 # ---------------------- Constants and Variables ---------------------- #
 PPR = 16  # Pulses per revolution
 GEAR_RATIO = 120
@@ -90,7 +90,8 @@ COUNTER_STOP = 50
 object_detected = False
 left_Speed = 0
 right_Speed = 0
-base_speed = 50  # Base speed in %
+base_speed_left = 50
+base_speed_right = 53.5
 returning_to_node = False
 state_entry_time = ticks_ms()
 
@@ -112,7 +113,7 @@ print("Total cost:", cost)
 
 #robot starts at the first node
 current_node = 'F1'
-
+last_update = ticks_ms()
 # --------------------------- Initialization --------------------------- #
 print("Init sensors")
 SeeFunctions.setup_ir_sensors(*IR_sensor_pins)
@@ -120,6 +121,9 @@ SeeFunctions.setup_VL53L0X(i2c)
 
 # ----------------------------- Main Loop ----------------------------- #
 while True:
+    current_time = ticks_ms()
+    dt = ticks_diff(current_time, last_update)
+    last_update = current_time
     # ----------------------------- See ----------------------------- #
     distance_mm = SeeFunctions.TOFdistance() 
     sensor_vals = SeeFunctions.read_binary_values()
@@ -131,20 +135,18 @@ while True:
     # calculate speed based on encoder ticks
     left_distance_cm = (delta_ticks_left / PPR / GEAR_RATIO) * math.pi * WHEEL_DIAMETER_CM
     right_distance_cm = (delta_ticks_right / PPR / GEAR_RATIO) * math.pi * WHEEL_DIAMETER_CM
-    # calculate speed in cm/s
-    delta_d = (right_distance_cm + left_distance_cm) / 2.0
-    delta_theta = (right_distance_cm - left_distance_cm) / WHEEL_BASE_CM
-    # displacement in cm
-    theta += delta_theta
-    x += delta_d * math.cos(theta)
-    y += delta_d * math.sin(theta)
+    left_wheel_speed, right_wheel_speed = ThinkFunctions.get_wheel_speeds(delta_ticks_left, delta_ticks_right, dt, PPR, GEAR_RATIO, WHEEL_DIAMETER_CM)
+    
+    x, y, theta = ThinkFunctions.update_pose(x, y, theta, left_distance_cm, right_distance_cm, WHEEL_BASE_CM)
+
     error = ThinkFunctions.compute_error(sensor_vals, method='binary')
+
 
     # ---------------------------- Think ---------------------------- #
 
     if state == 'IDLE':
-        left_Speed = base_speed
-        right_Speed = base_speed
+        left_Speed = base_speed_left
+        right_Speed = base_speed_right
         if current_task < len(pickup_nodes):
             state = 'IDLE'
 
@@ -220,13 +222,13 @@ while True:
 
          
     # ----------------------------- Act ----------------------------- #
-    print(f"state: {state}")
-    print(f"Pose: x={x:.2f} cm, y={y:.2f} cm, θ={math.degrees(theta):.2f}°")
-    print(f"distance: {distance_mm:.2f}")
+    if counter > 20:
+        print(f"state: {state}")
+        print(f"Pose: x={x:.2f} cm, y={y:.2f} cm, θ={math.degrees(theta):.2f}°")
+        print(f"distance: {distance_mm:.2f}")
+        print(f"Wheel speeds → L: {left_wheel_speed:.2f} cm/s, R: {right_wheel_speed:.2f} cm/s")
+        counter = 0
     motorA.set_speed(left_Speed)
     motorB.set_speed(right_Speed)
-
-    print(sensor_vals)
-    print(counter)
     counter += 1
     sleep(0.1)
