@@ -1,5 +1,5 @@
 from machine import Pin, I2C, ADC
-from time import sleep
+from time import sleep, ticks_ms, ticks_diff
 from VL53L0X import VL53L0X
 import math
 
@@ -76,3 +76,21 @@ def read_binary_values():
     norm = read_normalized_values()
     print("Norm:     ", norm)
     return [1 if v > threshold else 0 for v in norm]
+
+## ----------------BUTTON DEBOUNCE/Interrupt --------------##
+
+last_press_time = 0
+DEBOUNCE_MS = 200  # default debounce threshold in milliseconds
+
+def setup_button(pin_number, callback, debounce_ms=200):
+    global last_press_time, DEBOUNCE_MS
+    DEBOUNCE_MS = debounce_ms
+    pin = Pin(pin_number, Pin.IN, Pin.PULL_UP)
+    pin.irq(trigger=Pin.IRQ_FALLING, handler=lambda p: _debounced_handler(p, callback))
+
+def _debounced_handler(pin, callback):
+    global last_press_time
+    current_time = ticks_ms()
+    if ticks_diff(current_time, last_press_time) > DEBOUNCE_MS:
+        last_press_time = current_time
+        callback(pin)

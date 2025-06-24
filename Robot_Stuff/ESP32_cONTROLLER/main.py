@@ -1,40 +1,15 @@
 from machine import Pin, I2C, PWM
 from time import sleep, ticks_ms, ticks_diff
 from Utils import SeeFunctions, ThinkFunctions, ActFunctions
+from Utils.encoder_handler import setup_encoders, read_and_reset_ticks
 import math
-import nodes
 
-sleep(1)
-# ------------------------- Encoder Setup ------------------------- #
-tick_count_1 = 0
-last_a_1 = 0
-tick_count_2 = 0
-last_a_2 = 0
-i2c = I2C(0, scl=Pin(22), sda=Pin(21))  # adjust pins as needed
+sleep(1)  # Short delay to allow hardware to stabilize
+
+# ------------------------ Limit Switch Setup ------------------------ #
 
 
-# Encoder 1 ISR
-print("Init encoder 1")
-def update_encoder1(pin):
-    global tick_count_1, last_a_1
-    a = pin_a1.value()
-    b = pin_b1.value()
-    if a != last_a_1:
-        direction = 1 if a != b else -1
-        tick_count_1 += direction
-        last_a_1 = a
-
-# Encoder 2 ISR
-print("Init encoder 2")
-def update_encoder2(pin):
-    global tick_count_2, last_a_2
-    a = pin_a2.value()
-    b = pin_b2.value()
-    if a != last_a_2:
-        direction = 1 if a != b else -1
-        tick_count_2 += direction
-        last_a_2 = a
-
+# ------------------------ Motor Class ------------------------ #
 class Motor:
     def __init__(self, pin_fwd, pin_rev, freq=1000):
         self.pwm_fwd = PWM(Pin(pin_fwd))
@@ -43,12 +18,8 @@ class Motor:
         self.pwm_rev.freq(freq)
 
     def set_speed(self, speed_percent):
-        # Clamp to -100..100
         speed_percent = max(min(speed_percent, 100), -100)
-
-        # Convert to 16-bit duty cycle (0..65535)
         duty = int(abs(speed_percent) / 100 * 65535)
-
         if speed_percent >= 0:
             self.pwm_fwd.duty_u16(duty)
             self.pwm_rev.duty_u16(0)
@@ -59,150 +30,121 @@ class Motor:
     def stop(self):
         self.pwm_fwd.duty_u16(0)
         self.pwm_rev.duty_u16(0)
+def handle_limit_switch(pin):
+    print("Limit switch pressed!")
 
-motorA = Motor(pin_fwd=27, pin_rev=14)
-motorB = Motor(pin_fwd=25, pin_rev=26)
+SeeFunctions.setup_button(pin_number=4, callback=handle_limit_switch)
+# ------------------------ I2C & Motor Setup ------------------------ #
+i2c = I2C(0, scl=Pin(22), sda=Pin(21))
+motorA = Motor(27, 14)
+motorB = Motor(25, 26)
 
+setup_encoders({
+    'a1': 18,
+    'b1': 13,
+    'a2': 12,
+    'b2': 5
+})
 
-# Encoder Pins
-pin_a1 = Pin(18, Pin.IN)
-pin_b1 = Pin(13, Pin.IN)
-pin_a2 = Pin(12, Pin.IN)
-pin_b2 = Pin(5, Pin.IN)
-
-# Attach encoder interruptspin_a1.irq(trigger=Pin.IRQ_RISING | Pin.IRQ_FALLING, handler=update_encoder1)
-pin_a1.irq(trigger=Pin.IRQ_RISING | Pin.IRQ_FALLING, handler=update_encoder1)
-pin_a2.irq(trigger=Pin.IRQ_RISING | Pin.IRQ_FALLING, handler=update_encoder2)
-# ---------------------- Constants and Variables ---------------------- #
-PPR = 16  # Pulses per revolution
+# ------------------------ Constants & State ------------------------ #
+PPR = 16
 GEAR_RATIO = 120
 WHEEL_DIAMETER_CM = 6.5
 WHEEL_BASE_CM = 15.5
 recognition_distance = 200  # mm
 
-x, y, theta = 0.0, 0.0, 0.0  # Initial position (cm, radians)
-
+x, y, theta = 0.0, 0.0, 0.0  # Initial pose
 IR_sensor_pins = [36, 34, 35, 32, 39]
 counter = 0
-COUNTER_MAX = 5
-COUNTER_STOP = 50
-
-object_detected = False
-left_Speed = 0
-right_Speed = 0
 base_speed_left = 50
 base_speed_right = 53.5
 returning_to_node = False
 state_entry_time = ticks_ms()
 
-#statemachine variables
+# State Machine
 pickup_nodes = ['A1', 'A2', 'A3', 'A4']
 dropoff_nodes = ['G6', 'G7', 'G8', 'G9']
 start = 'F1'
 goal = 'D5'
 state = 'IDLE'
-path = []
-current_task = 0
-last_node = None
-
 path, cost = ThinkFunctions.dijkstra(start, goal)
+current_task = 0
+current_node = 'F1'
 print("Path:", path)
 print("Total cost:", cost)
 
-
-
-#robot starts at the first node
-current_node = 'F1'
-last_update = ticks_ms()
-# --------------------------- Initialization --------------------------- #
+# ------------------------ Sensor Initialization ------------------------ #
 print("Init sensors")
 SeeFunctions.setup_ir_sensors(*IR_sensor_pins)
 SeeFunctions.setup_VL53L0X(i2c)
 
-# ----------------------------- Main Loop ----------------------------- #
+# ------------------------ Main Loop ------------------------ #
+last_update = ticks_ms()
+
 while True:
     current_time = ticks_ms()
     dt = ticks_diff(current_time, last_update)
     last_update = current_time
-    # ----------------------------- See ----------------------------- #
-    distance_mm = SeeFunctions.TOFdistance() 
+
+    # -------- See -------- #
+    distance_mm = SeeFunctions.TOFdistance()
     sensor_vals = SeeFunctions.read_binary_values()
-    # Encoder feedback
-    delta_ticks_left = tick_count_1
-    delta_ticks_right = tick_count_2
-    tick_count_1 = 0
-    tick_count_2 = 0
-    # calculate speed based on encoder ticks
+
+    # Read encoder deltas and reset counts
+    delta_ticks_left, delta_ticks_right = read_and_reset_ticks()
+
+    # Calculate wheel speeds and pose update
     left_distance_cm = (delta_ticks_left / PPR / GEAR_RATIO) * math.pi * WHEEL_DIAMETER_CM
     right_distance_cm = (delta_ticks_right / PPR / GEAR_RATIO) * math.pi * WHEEL_DIAMETER_CM
-    left_wheel_speed, right_wheel_speed = ThinkFunctions.get_wheel_speeds(delta_ticks_left, delta_ticks_right, dt, PPR, GEAR_RATIO, WHEEL_DIAMETER_CM)
-    
     x, y, theta = ThinkFunctions.update_pose(x, y, theta, left_distance_cm, right_distance_cm, WHEEL_BASE_CM)
-
     error = ThinkFunctions.compute_error(sensor_vals, method='binary')
 
-
-    # ---------------------------- Think ---------------------------- #
-
+    # -------- Think -------- #
     if state == 'IDLE':
         left_Speed = base_speed_left
         right_Speed = base_speed_right
-        if current_task < len(pickup_nodes):
-            state = 'IDLE'
 
     elif state == 'Line_following':
-        print("Following line...")
-        # 1. Object Detection
-        if distance_mm <= recognition_distance:  # Check if distance is below threshold
+        if distance_mm <= recognition_distance:
             state = 'AVOID_OBSTACLE'
 
-        # 2. Line Following PID Control
         correction = ThinkFunctions.pid_update(error, Kp=1.0, Ki=0.0, Kd=0.1)
-        left_speed = base_speed - correction
-        
-        right_speed = base_speed + correction
+        left_Speed = base_speed_left - correction
+        right_Speed = base_speed_right + correction
 
-        # 3. Node Detection
-        num_active = sum(sensor_vals)
-        if num_active >= 3:  # Three or more sensors active => cross section
-            state = 'AT_NODE'  # Transition to whatever handles node logic
+        if sum(sensor_vals) >= 3:
+            state = 'AT_NODE'
 
     elif state == 'AVOID_OBSTACLE':
-        state_entry_time = ticks_ms()
         if ticks_diff(ticks_ms(), state_entry_time) < 1200:
-            # During turn phase (1.2s)
-            left_Speed = -base_speed
-            right_Speed = base_speed
+            left_Speed = -base_speed_left
+            right_Speed = base_speed_right
         else:
             left_Speed = 0
             right_Speed = 0
-            returning_to_node = True
             state = 'Line_following'
             state_entry_time = ticks_ms()
 
     elif state == 'AT_NODE':
         if not path:
-            print("No path left.")
             state = 'IDLE'
-
-        prev_node = current_node
-        current_node = path.pop(0)
-
-        if not path:
-            print("Reached goal node:", current_node)
-            state = 'IDLE'
-
-        next_node = path[0]
-        turn = ThinkFunctions.get_turn_direction(prev_node, current_node, next_node)
-
-        print(f"From {prev_node} to {current_node} → {next_node}, turn: {turn}")
-        state = turn  # 'turn_left', 'turn_right', or 'go_straight'
-        state_entry_time = ticks_ms()  # for timing motor action
+        else:
+            prev_node = current_node
+            current_node = path.pop(0)
+            if not path:
+                print("Reached goal node:", current_node)
+                state = 'IDLE'
+            else:
+                next_node = path[0]
+                turn = ThinkFunctions.get_turn_direction(prev_node, current_node, next_node)
+                print(f"From {prev_node} to {current_node} → {next_node}, turn: {turn}")
+                state = turn
+                state_entry_time = ticks_ms()
 
     elif state == 'turn_left':
-        if ticks_diff(ticks_ms(), state_entry_time) < 700:  # adjust timing for your robot
-            left_Speed = -base_speed
-            right_Speed = base_speed
+        if ticks_diff(ticks_ms(), state_entry_time) < 700:
+            left_Speed = -base_speed_left
+            right_Speed = base_speed_right
         else:
             left_Speed = 0
             right_Speed = 0
@@ -211,24 +153,23 @@ while True:
 
     elif state == 'turn_right':
         if ticks_diff(ticks_ms(), state_entry_time) < 700:
-            left_Speed = base_speed
-            right_Speed = -base_speed
+            left_Speed = base_speed_left
+            right_Speed = -base_speed_right
         else:
             left_Speed = 0
             right_Speed = 0
             state = 'Line_following'
             state_entry_time = ticks_ms()
-        
 
-         
-    # ----------------------------- Act ----------------------------- #
+    # -------- Act -------- #
     if counter > 20:
-        print(f"state: {state}")
+        print(f"State: {state}")
         print(f"Pose: x={x:.2f} cm, y={y:.2f} cm, θ={math.degrees(theta):.2f}°")
-        print(f"distance: {distance_mm:.2f}")
-        print(f"Wheel speeds → L: {left_wheel_speed:.2f} cm/s, R: {right_wheel_speed:.2f} cm/s")
+        print(f"Distance: {distance_mm:.2f} mm")
         counter = 0
+
     motorA.set_speed(left_Speed)
     motorB.set_speed(right_Speed)
+
     counter += 1
     sleep(0.1)

@@ -1,6 +1,6 @@
 import heapq
-from nodes import graph
-from math import sqrt, atan2, pi
+from Utils.nodes import graph
+from math import atan2, pi, cos, sin
 
  ##----------------IR GROUND SENSOR----------------##
 
@@ -85,21 +85,60 @@ def pid_update(error, Kp, Ki, Kd):
     last_pid_error = error
     return Kp * error + Ki * pid_error_sum + Kd * d_error
 
+##----------------ROBOT POSE UPDATE----------------##
+def normalize_angle_rad(angle_rad):
+    """Normalize angle to [-π, π) radians."""
+    from math import pi
+    angle_rad = (angle_rad + pi) % (2 * pi) - pi
+    return angle_rad
 
-## -- TURN DETECTION -- ##
-def get_turn_direction(prev_node, current_node, next_node):
-    def angle(a, b):
-        ax, ay = graph[a]['pos']
-        bx, by = graph[b]['pos']
-        return atan2(by - ay, bx - ax)
-   
-    a1 = angle(prev_node, current_node)
-    a2 = angle(current_node, next_node)
-    delta = (a2 - a1 + pi) % (2 * pi) - pi
+def update_pose(x, y, theta, delta_left_cm, delta_right_cm, wheel_base_cm):
+    """
+    Updates the robot's pose based on encoder distances.
 
-    if delta > 0.2:
-        return 'turn_left'
-    elif delta < -0.2:
-        return 'turn_right'
-    else:
-        return 'line_following'
+    Inputs:
+        x, y           : current position (cm)
+        theta          : current heading (radians)
+        delta_left_cm  : left wheel distance (cm)
+        delta_right_cm : right wheel distance (cm)
+        wheel_base_cm  : distance between wheels (cm)
+
+    Returns:
+        Updated x, y, theta (with theta ∈ [-π, π))
+    """
+    delta_d = (delta_right_cm + delta_left_cm) / 2.0
+    delta_theta = (delta_right_cm - delta_left_cm) / wheel_base_cm
+
+    theta += delta_theta
+    theta = normalize_angle_rad(theta)
+
+    x += delta_d * cos(theta)
+    y += delta_d * sin(theta)
+
+    return x, y, theta
+
+#----------------WHEEL SPEED CALCULATION----------------##
+def get_wheel_speeds(ticks_left, ticks_right, dt_ms, ppr, gear_ratio, wheel_diameter_cm):
+    """
+    Calculate left and right wheel speeds in cm/s.
+
+    Inputs:
+        ticks_left / ticks_right: encoder ticks since last update
+        dt_ms: time interval in milliseconds
+        ppr: pulses per revolution
+        gear_ratio: gear reduction ratio
+        wheel_diameter_cm: wheel diameter in cm
+
+    Returns:
+        (speed_left_cm_s, speed_right_cm_s)
+    """
+    if dt_ms == 0:
+        return 0.0, 0.0  # Prevent division by zero
+
+    cm_per_tick = (pi * wheel_diameter_cm) / (ppr * gear_ratio)
+    delta_t_s = dt_ms / 1000.0
+
+    speed_left = ticks_left * cm_per_tick / delta_t_s
+    speed_right = ticks_right * cm_per_tick / delta_t_s
+
+    return speed_left, speed_right
