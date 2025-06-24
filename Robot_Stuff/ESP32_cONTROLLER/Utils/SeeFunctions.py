@@ -74,7 +74,6 @@ def read_normalized_values():
 
 def read_binary_values():
     norm = read_normalized_values()
-    print("Norm:     ", norm)
     return [1 if v > threshold else 0 for v in norm]
 
 ## ----------------BUTTON DEBOUNCE/Interrupt --------------##

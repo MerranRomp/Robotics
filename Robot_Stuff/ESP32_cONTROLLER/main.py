@@ -31,13 +31,22 @@ class Motor:
         self.pwm_fwd.duty_u16(0)
         self.pwm_rev.duty_u16(0)
 def handle_limit_switch(pin):
+    global magnet_status
+    #magnet_status = not magnet_status  # Toggle state
+    #magnet_pin.value(magnet_status)    # Set output pin accordingly
+    
     print("Limit switch pressed!")
+    
 
-SeeFunctions.setup_button(pin_number=4, callback=handle_limit_switch)
+SeeFunctions.setup_button(pin_number=23, callback=handle_limit_switch)
 # ------------------------ I2C & Motor Setup ------------------------ #
 i2c = I2C(0, scl=Pin(22), sda=Pin(21))
 motorA = Motor(27, 14)
-motorB = Motor(25, 26)
+motorB = Motor(26, 25)
+
+magnet_status = 0
+magnet_status = False
+magnet_pin = Pin(16, Pin.OUT)
 
 setup_encoders({
     'a1': 18,
@@ -56,8 +65,8 @@ recognition_distance = 200  # mm
 x, y, theta = 0.0, 0.0, 0.0  # Initial pose
 IR_sensor_pins = [36, 34, 35, 32, 39]
 counter = 0
-base_speed_left = 50
-base_speed_right = 53.5
+base_speed_left = 70.5
+base_speed_right = 69
 returning_to_node = False
 state_entry_time = ticks_ms()
 
@@ -101,9 +110,15 @@ while True:
 
     # -------- Think -------- #
     if state == 'IDLE':
-        left_Speed = base_speed_left
-        right_Speed = base_speed_right
-
+        left_Speed = 0
+        right_Speed = 0
+        
+        # Start task if path is available
+        if path and current_task < len(pickup_nodes):
+            print("Leaving IDLE: Starting path to goal.")
+            state = 'Forward'
+            state_entry_time = ticks_ms()
+        
     elif state == 'Line_following':
         if distance_mm <= recognition_distance:
             state = 'AVOID_OBSTACLE'
@@ -148,11 +163,11 @@ while True:
         else:
             left_Speed = 0
             right_Speed = 0
-            state = 'Line_following'
+            state = 'Forward'
             state_entry_time = ticks_ms()
 
     elif state == 'turn_right':
-        if ticks_diff(ticks_ms(), state_entry_time) < 700:
+        if ticks_diff(ticks_ms(), state_entry_time) < 7000:
             left_Speed = base_speed_left
             right_Speed = -base_speed_right
         else:
@@ -160,9 +175,18 @@ while True:
             right_Speed = 0
             state = 'Line_following'
             state_entry_time = ticks_ms()
+    
+    elif state == 'Forward':
+        if distance_mm <= recognition_distance:
+            state = 'turn_left'
+        else:
+            left_Speed = base_speed_left
+            right_Speed = base_speed_right
+            state_entry_time = ticks_ms()
 
     # -------- Act -------- #
     if counter > 20:
+        print(f"speed: {left_Speed}  ,  {right_Speed}")
         print(f"State: {state}")
         print(f"Pose: x={x:.2f} cm, y={y:.2f} cm, θ={math.degrees(theta):.2f}°")
         print(f"Distance: {distance_mm:.2f} mm")
@@ -173,3 +197,4 @@ while True:
 
     counter += 1
     sleep(0.1)
+
