@@ -78,12 +78,17 @@ def get_turn_directions(graph, path):
 pid_error_sum = 0
 last_pid_error = 0
 
-def pid_update(error, Kp, Ki, Kd):
-    global pid_error_sum, last_pid_error
-    pid_error_sum += error
-    d_error = error - last_pid_error
-    last_pid_error = error
-    return Kp * error + Ki * pid_error_sum + Kd * d_error
+def pid_update(error, Kp, Ki, Kd, update=True):
+    global pid_error_sum, last_pid_error, last_pid_output
+
+    if update:
+        pid_error_sum += error
+        d_error = error - last_pid_error
+        last_pid_error = error
+        last_pid_output = Kp * error + Ki * pid_error_sum + Kd * d_error
+    # If not updating (line lost), return last correction
+    return last_pid_output
+
 
 ##----------------ROBOT POSE UPDATE----------------##
 def normalize_angle_rad(angle_rad):
@@ -142,3 +147,13 @@ def get_wheel_speeds(ticks_left, ticks_right, dt_ms, ppr, gear_ratio, wheel_diam
     speed_right = ticks_right * cm_per_tick / delta_t_s
 
     return speed_left, speed_right
+
+
+
+def angle_difference(current, start):
+    delta = current - start
+    while delta > pi:
+        delta -= 2 * pi
+    while delta < -pi:
+        delta += 2 * pi
+    return abs(delta)

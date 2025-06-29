@@ -33,7 +33,7 @@ prev_inputs = [200] * 5
 prev_outputs = [200] * 5
 min_vals = [294, 239, 33, 39, 0]
 max_vals = [1023, 1023, 785, 938, 1023]
-threshold = 50        # Set based on testing
+threshold = 70        # Set based on testing
 
 # Filter coefficients
 alpha_lowpass = 0.5
@@ -64,7 +64,7 @@ def apply_lowpass_filter(raw_values):
     return filtered
 
 def read_normalized_values():
-    filtered = apply_lowpass_filter(read_raw_values())
+    filtered =(read_raw_values())  #apply_lowpass_filter(read_raw_values())
     normalized = []
     for val, min_v, max_v in zip(filtered, min_vals, max_vals):
         norm = (val - min_v) / (max_v - min_v) * 100
