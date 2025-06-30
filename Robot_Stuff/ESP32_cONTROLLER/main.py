@@ -71,12 +71,12 @@ setup_encoders({
 # ------------------------ Constants & State ------------------------ #
 PPR = 16
 GEAR_RATIO = 100
-WHEEL_DIAMETER_CM = 6.4
+WHEEL_DIAMETER_CM = 6.2
 WHEEL_BASE_CM = 15.5
 recognition_distance = 100  # mm
 last_error = 0
 line_lost_time = None
-line_lost_duration = 5000  # milliseconds to keep applying last known correction
+line_lost_duration = 3000  # milliseconds to keep applying last known correction
 last_node_time = 0  # time of last AT_NODE trigger
 
 
@@ -93,7 +93,7 @@ turn_start_angle = None
 pickup_nodes = ['A1', 'A2', 'A3', 'A4']
 dropoff_nodes = ['G6', 'G7', 'G8', 'G9']
 start = 'F1'
-goal = 'D1'
+goal = 'D5'
 state = 'IDLE'
 path, cost = ThinkFunctions.dijkstra(start, goal)
 if path and path[0] == start:
@@ -136,12 +136,14 @@ while True:
         state = 'Line_following'
         
     elif state == 'Line_following':
+        pattern = sensor_vals
         if distance_mm <= recognition_distance:
             state = 'turn_left'
             
         total = sum(sensor_vals)
 
-        if total <= 2:
+        if pattern == [0, 0, 0, 0, 0] or pattern == [1, 0, 0, 0, 0] or pattern == [0, 0, 0, 0, 1] or pattern == [0, 0, 0, 1, 1]  or pattern == [1, 1, 0, 0, 0]:
+            print(f"node!: {sensor_vals}")
             state = 'AT_NODE'
 
         elif total == 5:
@@ -157,8 +159,6 @@ while True:
                 right_Speed = base_speed_right
 
         else:
-            pattern = sensor_vals
-
             # Centered
             if pattern == [1, 1, 0, 1, 1] or pattern == [1, 0, 0, 0, 1] or pattern == [0, 1, 0, 1, 0]:
                 left_Speed = base_speed_left
@@ -202,48 +202,45 @@ while True:
             state_entry_time = ticks_ms()
 
     elif state == 'AT_NODE':
-        print("At node:", current_node)
-
-        # Prevent re-triggering if node was visited recently
         if ticks_diff(ticks_ms(), last_node_time) < 2000:
             print("Recently visited node — returning to Line_following")
             state = 'Line_following'
+            continue
 
+        last_node_time = ticks_ms()
+
+        if not path:
+            print(f"Reached goal at node: {current_node}")
+            state = 'stop'
+            continue
+
+        # Progress to next node
+        prev_node = current_node
+        current_node = path.pop(0)
+        print(f"At node: {current_node}")
+
+        if not path:
+            print(f"Final node reached: {current_node}")
+            state = 'stop'
         else:
-            last_node_time = ticks_ms()  # Update the last confirmed node time
+            next_node = path[0]
+            after_next_node = path[1] if len(path) > 1 else next_node
 
-            if path and path[0] == current_node:
-                print(f"Removing duplicate current node '{current_node}' from path")
-                path.pop(0)
+            directions = ThinkFunctions.get_turn_directions(
+                nodes.graph, [prev_node, current_node, next_node]
+            )
+            _, turn = directions[0]
 
-            if not path:
-                print("No path left. Going to IDLE.")
-                state = 'IDLE'
+            print(f"Turning {turn} from {prev_node} → {current_node} → {next_node}")
 
+            if turn == 'left':
+                state = 'turn_left'
+            elif turn == 'right':
+                state = 'turn_right'
             else:
-                prev_node = current_node
-                next_node = path[0]
-                after_next_node = path[1] if len(path) > 1 else next_node
+                state = 'Line_following'
 
-                directions = ThinkFunctions.get_turn_directions(nodes.graph, [prev_node, next_node, after_next_node])
-                _, turn = directions[0]
-
-                print(f"Turning {turn} from {prev_node} → {next_node} → {after_next_node}")
-
-                current_node = path.pop(0)
-
-                if turn == 'left':
-                    state = 'turn_left'
-                elif turn == 'right':
-                    state = 'turn_right'
-                else:
-                    state = 'Line_following'
-
-                state_entry_time = ticks_ms()
-
-
-
-
+        state_entry_time = ticks_ms()
 
 
     elif state == 'turn_left':
@@ -256,16 +253,17 @@ while True:
             left_Speed = -base_speed_left
             right_Speed = base_speed_right
         else:
-            left_Speed = 0
-            right_Speed = 0
+            # Start driving forward for 1 second
+            left_Speed = base_speed_left
+            right_Speed = base_speed_right
             turn_start_angle = None
-            state = 'Forward'
+            state = 'drive_after_turn'
             state_entry_time = ticks_ms()
 
 
     elif state == 'turn_right':
         if turn_start_angle is None:
-            turn_start_angle = theta
+            turn_start_angle = theta  # Record starting angle once
 
         angle_turned = ThinkFunctions.angle_difference(theta, turn_start_angle)
 
@@ -273,22 +271,36 @@ while True:
             left_Speed = base_speed_left
             right_Speed = -base_speed_right
         else:
-            left_Speed = 0
-            right_Speed = 0
+            # Start driving forward for 1 second
+            left_Speed = base_speed_left
+            right_Speed = base_speed_right
             turn_start_angle = None
-            state = 'Forward'
+            state = 'drive_after_turn'
             state_entry_time = ticks_ms()
 
     elif state == 'stop':
         left_Speed = 0
         right_Speed = 0
 
+    elif state == 'drive_after_turn':
+        if ticks_ms() - state_entry_time < 1000:
+            # Drive straight
+            left_Speed = base_speed_left
+            right_Speed = base_speed_right
+        else:
+            # After 1s, resume line following
+            left_Speed = 0
+            right_Speed = 0
+            state = 'Line_following'
+            state_entry_time = ticks_ms()
+            continue  # Skip current iteration to let next loop handle speeds
+        
     # -------- Act -------- #
     if counter > 20:
         print(f"speed: {left_Speed}  ,  {right_Speed}")
         print(f"State: {state}")
-        print(f"Pose: x={x:.2f} cm, y={y:.2f} cm, θ={math.degrees(theta):.2f}°")
-        print(f"Distance: {distance_mm:.2f} mm")
+        #print(f"Pose: x={x:.2f} cm, y={y:.2f} cm, θ={math.degrees(theta):.2f}°")
+        #print(f"Distance: {distance_mm:.2f} mm")
         print(f"{sensor_vals}")
         counter = 0
 
@@ -296,4 +308,4 @@ while True:
     motorB.set_speed(right_Speed)
 
     counter += 1
-    sleep(0.02)
+    sleep(0.01)
