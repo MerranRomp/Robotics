@@ -63,9 +63,9 @@ def get_turn_directions(graph, path):
         delta = angle2 - angle1
         delta = (delta + pi) % (2 * pi) - pi  # Normalize to [-π, π]
 
-        if delta > 0.2:
+        if delta > 0.5:
             turn = 'left'
-        elif delta < -0.2:
+        elif delta < -0.5:
             turn = 'right'
         else:
             turn = 'straight'
