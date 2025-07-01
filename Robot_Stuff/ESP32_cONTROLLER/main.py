@@ -208,28 +208,53 @@ while True:
 
         last_node_time = ticks_ms()
 
-        # Progress to next node first!
-        prev_node = current_node
-        if path:
-            current_node = path.pop(0)
-            print(f"At node: {current_node}")
-        else:
-            print("Warning: path empty in AT_NODE state!")
+        if not path:
+            print(f"Reached goal at node: {current_node}")
             state = 'stop'
             continue
 
-        # Prevent re-pickup if delivering
+        # Progress to next node
+        prev_node = current_node
+        current_node = path.pop(0)
+        print(f"At node: {current_node}")
+
+        # Handle pickup logic
         if current_node == pickup_node and not is_delivering:
             print(f"Arrived at pickup node: {current_node}")
             state = 'pick_up_box'
             state_entry_time = ticks_ms()
             continue
 
+        # Handle dropoff logic
         elif current_node == dropoff_node:
             print(f"Arrived at drop-off node: {current_node}")
             state = 'drop_off_box'
             state_entry_time = ticks_ms()
             continue
+
+        # Determine turning direction based on next nodes
+        if path:
+            next_node = path[0]
+            after_next_node = path[1] if len(path) > 1 else next_node
+
+            directions = ThinkFunctions.get_turn_directions(
+                nodes.graph, [prev_node, current_node, next_node]
+            )
+            _, turn = directions[0]
+
+            print(f"Turning {turn} from {prev_node} → {current_node} → {next_node}")
+
+            if turn == 'left':
+                state = 'turn_left'
+            elif turn == 'right':
+                state = 'turn_right'
+            else:
+                state = 'Line_following'
+        else:
+            print(f"Final node reached: {current_node}")
+            state = 'stop'
+
+        state_entry_time = ticks_ms()
 
     elif state == 'turn_left':
         if turn_start_angle is None:
