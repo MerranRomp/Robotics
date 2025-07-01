@@ -45,9 +45,14 @@ motorB = Motor(26, 25)
 left_Speed = 0
 right_Speed = 0
 
+turn_timeout = 4000
+
+
 magnet_status = False
 limit_triggered = False
 magnet_pin = Pin(16, Pin.OUT)
+limit_hold_start = None
+is_delivering = False
 
 setup_encoders({
     'a1': 18,
@@ -213,8 +218,8 @@ while True:
             state = 'stop'
             continue
 
-        # Handle arrival at pickup or dropoff node
-        if current_node == pickup_node:
+        # Prevent re-pickup if delivering
+        if current_node == pickup_node and not is_delivering:
             print(f"Arrived at pickup node: {current_node}")
             state = 'pick_up_box'
             state_entry_time = ticks_ms()
@@ -225,9 +230,6 @@ while True:
             state = 'drop_off_box'
             state_entry_time = ticks_ms()
             continue
-
-        # Continue with path navi
-
 
     elif state == 'turn_left':
         if turn_start_angle is None:
@@ -287,12 +289,49 @@ while True:
             if not magnet_status:
                 print("Activating magnet")
                 magnet_status = True
-                magnet_pin.value(1)
+                #magnet_pin.value(1)
                 pickup_start_time = ticks_ms()
 
-            # Drive forward
-            left_Speed = base_speed_left
-            right_Speed = base_speed_right
+            # Read sensors again
+            pattern = sensor_vals
+            total = sum(sensor_vals)
+
+            # Mild line following
+            if total == 5:
+                if last_error < 0:
+                    left_Speed = base_speed_left
+                    right_Speed = base_speed_right * 0.3
+                elif last_error > 0:
+                    left_Speed = base_speed_left * 0.3
+                    right_Speed = base_speed_right
+                else:
+                    left_Speed = -base_speed_left
+                    right_Speed = base_speed_right
+
+            else:
+                if pattern == [1, 1, 0, 1, 1] or pattern == [1, 0, 0, 0, 1] or pattern == [0, 1, 0, 1, 0]:
+                    left_Speed = base_speed_left
+                    right_Speed = base_speed_right
+
+                elif pattern in ([1, 0, 0, 1, 1], [1, 0, 1, 1, 1], [1, 0, 0, 0, 1], [0, 1, 0, 1, 1], [0, 1, 0, 0, 1]):
+                    left_Speed = base_speed_left * 0.8
+                    right_Speed = base_speed_right * 1.1
+
+                elif pattern in ([1, 1, 0, 0, 1], [1, 1, 1, 0, 1], [1, 0, 0, 0, 1], [1, 1, 0, 1, 0], [1, 0, 0, 1, 0]):
+                    left_Speed = base_speed_left * 1.1
+                    right_Speed = base_speed_right * 0.8
+
+                elif pattern in ([0, 1, 1, 1, 1], [0, 0, 1, 1, 1], [0, 1, 1, 0, 1], [0, 1, 0, 0, 1], [0, 1, 0, 0, 0], [0, 1, 1, 0, 0]):
+                    left_Speed = base_speed_left * 0.6
+                    right_Speed = base_speed_right * 1.2
+
+                elif pattern in ([1, 1, 1, 1, 0], [1, 1, 1, 0, 0], [1, 0, 1, 0, 0], [1, 0, 0, 0, 0], [1, 0, 0, 1, 0]):
+                    left_Speed = base_speed_left * 1.2
+                    right_Speed = base_speed_right * 0.6
+
+                else:
+                    left_Speed = base_speed_left
+                    right_Speed = base_speed_right
 
             # Poll switch
             if not limit_switch.value():  # Active LOW = pressed
@@ -313,39 +352,61 @@ while True:
 
         except Exception as e:
             print("ERROR in pick_up_box:", e)
-            # Optional: go to safe state
             left_Speed = 0
             right_Speed = 0
             state = 'stop'
-            
+     
     elif state == 'pickup_complete':
-        # Drive backwards slowly
-        left_Speed = -base_speed_left
-        right_Speed = -base_speed_right
+        print("Pickup complete — preparing 180° turn")
 
-        # Detect node pattern while reversing
-        pattern = sensor_vals
-        if pattern in ([1, 0, 0, 0, 0], [0, 0, 0, 0, 1], [0, 0, 0, 1, 1], [1, 1, 0, 0, 0], [1, 1, 1, 1, 1]):
-            print("Node detected while reversing — switching to pathfinding")
+        # Mark that we are now delivering
+        is_delivering = True
+
+        _, pickup_target = pickup_pairs[current_box_index]
+        current_node = pickup_target
+        print(f"Updated current_node to pickup target: {current_node}")
+
+        left_Speed = 0
+        right_Speed = 0
+        turn_start_angle = None
+        state = 'turn_around'
+        state_entry_time = ticks_ms()
+
+    elif state == 'turn_around':
+        if turn_start_angle is None:
+            turn_start_angle = theta
+            state_entry_time = ticks_ms()
+            print("Starting 180° turn from", turn_start_angle)
+
+        angle_turned = ThinkFunctions.angle_difference(theta, turn_start_angle)
+        
+        if angle_turned < math.radians(178) and ticks_diff(ticks_ms(), state_entry_time) < 4000:
+            left_Speed = -base_speed_left
+            right_Speed = base_speed_right
+        else:
+            print("Finished 180° turn or timeout hit")
             left_Speed = 0
             right_Speed = 0
-
-            # Decide next destination (e.g., dropoff)
-            pickup_node, pickup_target = pickup_pairs[current_box_index]
-            dropoff_node, dropoff_target = dropoff_pairs[current_box_index]
-
-            # Compute path from current node to drop-off
-            path, cost = ThinkFunctions.dijkstra(pickup_target, dropoff_node)
-            print("New path:", path)
-            current_node = pickup_target  # Pretend we landed there after reverse
-            if path and path[0] == current_node:
-                path.pop(0)
-            state = 'Line_following'
+            turn_start_angle = None
+            state = 'plan_path_to_dropoff'
             state_entry_time = ticks_ms()
 
+    elif state == 'plan_path_to_dropoff':
+        print("Planning path to drop-off...")
 
+        pickup_node, pickup_target = pickup_pairs[current_box_index]
+        dropoff_node, dropoff_target = dropoff_pairs[current_box_index]
 
-    
+        path, cost = ThinkFunctions.dijkstra(pickup_target, dropoff_node)
+        print("New path:", path, "with cost:", cost)
+        current_node = pickup_target  # Treat this as our current node
+
+        if path and path[0] == current_node:
+            path.pop(0)
+
+        state = 'Line_following'
+        state_entry_time = ticks_ms()
+
     # -------- Act -------- #
     if counter > 20:
         #print(f"speed: {left_Speed}  ,  {right_Speed}")
@@ -360,3 +421,4 @@ while True:
 
     counter += 1
     sleep(0.01)
+
