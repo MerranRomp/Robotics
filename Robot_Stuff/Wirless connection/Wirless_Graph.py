@@ -4,10 +4,10 @@ import threading
 import time
 
 # Replace with your correct serial port and baud rate
-SERIAL_PORT = 'COM5'  # e.g. '/dev/ttyUSB0' on Linux
+SERIAL_PORT = 'COM4'  # e.g. '/dev/ttyUSB0' on Linux
 BAUD_RATE = 115200
 
-# Graph data (same as yours)
+# Graph data
 graph = {
     'A1': {'pos': (-5, 4), 'neighbors': {'B1': 1}},
     'A2': {'pos': (-4, 4), 'neighbors': {'B2': 1}},
